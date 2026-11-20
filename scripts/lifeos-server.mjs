@@ -12,11 +12,12 @@ import { homedir, networkInterfaces } from "node:os";
 import { extname, join, resolve, sep } from "node:path";
 import { createGzip } from "node:zlib";
 import { COLLECTIONS } from "./lib/collections.mjs";
-import { addTask, capture, editTask, getDay, readHabits, recordSleep, tasksIn, updateDay, writeHabits } from "./lib/days.mjs";
+import { addTask, capture, editTask, getDay, readHabits, readNotes, recordSleep, tasksIn, updateDay, writeHabits } from "./lib/days.mjs";
 import { getPlan, readGoals, saveGoals } from "./lib/plan.mjs";
 import { addMoney, getMoney, removeMoney } from "./lib/money.mjs";
 import { getRewards } from "./lib/rewards.mjs";
 import { gateBetween, gateInfo, logGate } from "./lib/gate.mjs";
+import { library, logKnowledge, passages, saveQuote, session } from "./lib/knowledge.mjs";
 import { createItem, getItem, listItems, saveImage, trashItem, updateItem } from "./lib/notes.mjs";
 import { readSettings, writeSettings } from "./lib/settings.mjs";
 import { getReview, saveReview, weekOf } from "./lib/review.mjs";
@@ -355,6 +356,35 @@ async function api(req, res, parts) {
   if (name === "gate" && method === "POST") {
     const body = await readBody(req, 256 * 1024);
     return json(res, 201, { saved: logGate(body.events ?? body) });
+  }
+  if (name === "notes" && method === "GET") return json(res, 200, { notes: readNotes() });
+  // ---------- knowledge: cards and long reads (live only; some text is copyrighted) ----------
+  if (name === "knowledge" && method === "GET" && slug === "session") {
+    const n = Number(new URL(req.url || "/", "http://x").searchParams.get("n") || 3);
+    return json(res, 200, session(localToday(), Math.max(1, Math.min(10, n))));
+  }
+  if (name === "knowledge" && method === "GET" && slug === "library") {
+    // The books being read, for "Save a line" (their Quotes come back as cards).
+    const reading = listItems("books").filter((b) => b.status === "reading").map((b) => ({ slug: b.slug, title: String(b.title) }));
+    return json(res, 200, { ...library(localToday()), reading });
+  }
+  if (name === "knowledge" && method === "GET" && slug === "read" && parts[2]) {
+    const n = Number(new URL(req.url || "/", "http://x").searchParams.get("n") || 5);
+    return json(res, 200, { passages: passages(parts[2], n) });
+  }
+  if (name === "knowledge" && method === "POST" && slug === "log") {
+    const body = await readBody(req, 256 * 1024);
+    return json(res, 201, { saved: logKnowledge(body.events ?? body) });
+  }
+  if (name === "knowledge" && method === "PUT" && slug === "current") {
+    const body = await readBody(req);
+    const book = String(body.book ?? "");
+    if (!library(localToday()).books.some((b) => b.slug === book)) return json(res, 400, { error: "unknown long read" });
+    return json(res, 200, { saved: logKnowledge({ kind: "current", id: book }) });
+  }
+  if (name === "knowledge" && method === "POST" && slug === "quote") {
+    const body = await readBody(req);
+    return json(res, 201, saveQuote(body.book, body.text));
   }
   if (name === "capture" && method === "POST") {
     const body = await readBody(req);

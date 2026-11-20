@@ -5,6 +5,7 @@ import { loadDaily } from "@/lib/vault/daily";
 import { loadHabitDefinitions } from "@/lib/vault/habits";
 import { findInsights } from "@/lib/vault/insights";
 import { gateFindings, loadGate } from "@/lib/vault/gate";
+import { knowledgeFindings } from "@/lib/vault/knowledge";
 import { loadSettings } from "@/lib/vault/settings";
 
 export const metadata: Metadata = { title: "Insights" };
@@ -17,7 +18,7 @@ export default function InsightsPage() {
   const habits = loadHabitDefinitions().items;
   const records = loadDaily(habits).items;
   const today = new Date().toISOString().slice(0, 10);
-  const findings = [...findInsights(records, habits, loadSettings().sleepBy), ...gateFindings(loadGate(), records, today)];
+  const findings = [...findInsights(records, habits, loadSettings().sleepBy), ...gateFindings(loadGate(), records, today), ...knowledgeFindings(today)];
   const withMood = records.filter((r) => r.mood !== null).length;
   const withSleep = records.filter((r) => r.sleep !== null).length;
 

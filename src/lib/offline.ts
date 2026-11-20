@@ -13,7 +13,8 @@ export type Op =
   | { kind: "taskAdd"; date: string; body: { text: string; time?: string; priority?: string; repeat?: string; deadline?: boolean } }
   | { kind: "taskEdit"; date: string; matchText: string; body: Record<string, unknown> }
   | { kind: "goals"; scope: "year" | "month" | "week"; id: string; goals: { text: string; status: string }[] }
-  | { kind: "put"; path: string; body: unknown }; // any other save (weekly review, habit list)
+  | { kind: "put"; path: string; body: unknown } // any other save (weekly review, habit list)
+  | { kind: "post"; path: string; body: unknown }; // something new to add (a note to the Inbox)
 // (A task's `date` may also be "someday": the list of tasks without a date.)
 
 const DAY = (date: string) => `lifeos-day:${date}`;
@@ -93,6 +94,7 @@ export function flush(force = false): Promise<{ sent: number; errors: string[] }
         else if (op.kind === "taskAdd") await api("task", { method: "POST", body: { ...op.body, date: op.date } });
         else if (op.kind === "goals") await api(`goals/${op.scope}/${op.id}`, { method: "PUT", body: { goals: op.goals } });
         else if (op.kind === "put") await api(op.path, { method: "PUT", body: op.body });
+        else if (op.kind === "post") await api(op.path, { method: "POST", body: op.body });
         else await api("task", { method: "PUT", body: { ...op.body, date: op.date, matchText: op.matchText } });
         sent++;
       } catch (e) {

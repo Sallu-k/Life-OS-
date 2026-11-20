@@ -21,8 +21,8 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.Process;
 import android.provider.Settings;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The Gate's watcher: a small always-on service (with a quiet notification), NOT an Accessibility service,
@@ -32,6 +32,8 @@ import java.util.Set;
  *  - Opening a watched app (e.g. YouTube) without a fun session: shows the Gate for that app. Which app is
  *    in front comes from Android's usage record (Usage access), checked every second while the screen is on.
  *  - A fun session that runs out while the screen is on: shows "Time's up".
+ *  - An app for both work and fun (Brave): Purpose lets it through for 10 minutes; still in front after
+ *    that, the Gate asks "Still for the task?".
  * The Gate is drawn on top of everything (GateOverlay). Needs "Display over other apps" and Usage access; turned on from
  * Settings in the app (DevicePlugin.gateEnable), and started again after a restart (GateBoot).
  */
@@ -40,7 +42,7 @@ public class GateService extends Service {
     private static final String CHANNEL = "gate";
     private static GateService running;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Set<String> allowed = new HashSet<>(); // apps let through as urgent until the screen goes off
+    private final Map<String, Long> allowed = new HashMap<>(); // app -> let through until (ms); the screen going off clears it
     private String front = "";
     private String lastApp = ""; // the last real app in front (not LifeOS, not the launcher's lock screen)
     private long lastCheck = 0;
@@ -173,12 +175,24 @@ public class GateService extends Service {
             events.getNextEvent(e);
             if (e.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND) pkg = e.getPackageName();
         }
-        if (pkg == null || pkg.equals(front)) return;
+        if (pkg == null || pkg.equals(front)) {
+            Long until = allowed.get(front);
+            // A task pass ran out while the app is still in front.
+            if (until != null && until < now && (overlay == null || !overlay.showing())) gateFor(front);
+            return;
+        }
         front = pkg;
         if (pkg.equals(getPackageName()) || pkg.equals("com.android.systemui")) return;
         lastApp = pkg;
-        if (!GateStore.phoneOn(this)) return;
-        if (GateStore.watched(this, pkg) && !GateStore.funActive(this) && !allowed.contains(pkg)) show(GateOverlay.MODE_APP, pkg);
+        gateFor(pkg);
+    }
+
+    private void gateFor(String pkg) {
+        if (!GateStore.phoneOn(this) || !GateStore.watched(this, pkg) || GateStore.funActive(this)) return;
+        Long until = allowed.get(pkg);
+        if (until != null && until > System.currentTimeMillis()) return;
+        allowed.remove(pkg);
+        show(until != null ? GateOverlay.MODE_STILL : GateOverlay.MODE_APP, pkg);
     }
 
     private void onUnlock() {
@@ -227,8 +241,12 @@ public class GateService extends Service {
         if (left > 0) s.handler.postDelayed(s.timeUp, left);
     }
 
-    /** "Unlock" (urgent): let the app under the Gate through until the screen goes off. */
+    /** Purpose: let the app under the Gate through until the screen goes off (an app for both work and
+     *  fun only for 10 minutes, then the Gate asks again). */
     static void allowUnder() {
-        if (running != null && !running.lastApp.isEmpty()) running.allowed.add(running.lastApp);
+        GateService s = running;
+        if (s == null || s.lastApp.isEmpty()) return;
+        boolean dual = GateStore.dual(s, s.lastApp);
+        s.allowed.put(s.lastApp, dual ? System.currentTimeMillis() + 10 * 60_000L : Long.MAX_VALUE);
     }
 }

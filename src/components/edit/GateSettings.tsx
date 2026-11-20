@@ -12,6 +12,7 @@ interface Gate {
   minutes: number[];
   fun: { kind: string; label: string; app: string }[];
   watch: string[];
+  dual?: string[];
 }
 
 // "Comics: com.brave.browser" per line <-> { kind: "comics", label: "Comics", app: "com.brave.browser" }
@@ -29,6 +30,7 @@ export function GateSettings() {
   const [gate, setGate] = useState<Gate | null>(null);
   const [fun, setFun] = useState("");
   const [watch, setWatch] = useState("");
+  const [dual, setDual] = useState("");
   const [status, setStatus] = useState<GateStatus | null>(null);
   const [msg, setMsg] = useState("");
   useEffect(() => {
@@ -37,6 +39,7 @@ export function GateSettings() {
       setGate(s.gate);
       setFun(funToText(s.gate.fun));
       setWatch(s.gate.watch.join("\n"));
+      setDual((s.gate.dual ?? []).join("\n"));
     }, () => undefined);
   }, []);
   useEffect(() => {
@@ -50,12 +53,13 @@ export function GateSettings() {
 
   async function save() {
     if (!gate) return;
-    const body = { ...gate, fun: textToFun(fun), watch: watch.split(/\s+/).filter(Boolean) };
+    const body = { ...gate, fun: textToFun(fun), watch: watch.split(/\s+/).filter(Boolean), dual: dual.split(/\s+/).filter(Boolean) };
     try {
       const s = await api<{ gate: Gate }>("settings", { method: "PUT", body: { gate: body } });
       setGate(s.gate);
       setFun(funToText(s.gate.fun));
       setWatch(s.gate.watch.join("\n"));
+      setDual((s.gate.dual ?? []).join("\n"));
       feel("saved");
       setMsg("Saved. The phone picks it up after its next Gate.");
     } catch (e) {
@@ -128,6 +132,10 @@ export function GateSettings() {
       <label className="edit-field">
         <span>Phone apps that bring the Gate back when opened without Fun (one per line)</span>
         <textarea className="today-input" rows={3} value={watch} onChange={(e) => setWatch(e.target.value)} placeholder="com.google.android.youtube" />
+      </label>
+      <label className="edit-field">
+        <span>Apps for both work and fun (Purpose lets them through for 10 min, then asks again)</span>
+        <textarea className="today-input" rows={2} value={dual} onChange={(e) => setDual(e.target.value)} placeholder="com.brave.browser" />
       </label>
       <div className="flex items-center gap-3">
         <button type="button" className="chip edit-primary" onClick={save}>

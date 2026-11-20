@@ -75,9 +75,67 @@ final class GateStore {
 
     /** Apps that bring the Gate back when opened without a fun session. */
     static boolean watched(Context c, String pkg) {
+        if (dual(c, pkg)) return true;
         JSONArray w = info(c).optJSONArray("watch");
         if (w == null) return "com.google.android.youtube".equals(pkg) || "com.instagram.android".equals(pkg);
         for (int i = 0; i < w.length(); i++) if (pkg.equals(w.optString(i))) return true;
+        return false;
+    }
+
+    /** Apps used for both work and fun (Brave: tasks and comics): Purpose lets them through for 10 minutes. */
+    static boolean dual(Context c, String pkg) {
+        JSONArray d = info(c).optJSONArray("dual");
+        if (d == null) return "com.brave.browser".equals(pkg);
+        for (int i = 0; i < d.length(); i++) if (pkg.equals(d.optString(i))) return true;
+        return false;
+    }
+
+    // ---------- reading before leisure (cards and passages cached from the PC) ----------
+
+    /** The next thing to read before leisure: a passage of your long read and a card take turns; things
+     *  already read on the phone today are skipped (the cached list only refreshes when the PC answers). */
+    static JSONObject nextReading(Context c, boolean cardOnly) {
+        JSONObject k = info(c).optJSONObject("knowledge");
+        if (k == null) return null;
+        JSONArray done = doneToday(c);
+        JSONObject card = null;
+        JSONArray items = k.optJSONArray("items");
+        for (int i = 0; items != null && i < items.length() && card == null; i++) {
+            JSONObject it = items.optJSONObject(i);
+            if (it != null && !has(done, it.optString("id"))) card = it;
+        }
+        JSONObject passage = k.optJSONObject("passage");
+        if (cardOnly || (passage != null && has(done, passageId(passage)))) passage = null;
+        boolean passageTurn = !"passage".equals(prefs(c).getString("read_last", ""));
+        return passage != null && (passageTurn || card == null) ? passage : card;
+    }
+
+    static String passageId(JSONObject p) {
+        return p.optString("book") + ":" + p.optInt("index");
+    }
+
+    /** Logs a reading event (read, knew, notyet, passage) for the PC and marks it done here. */
+    static void readDone(Context c, String kind, String id, boolean passage) {
+        try {
+            enqueue(c, "knowledge/log", new JSONObject().put("kind", kind).put("id", id).put("at", now()));
+            JSONArray done = doneToday(c).put(id);
+            prefs(c).edit().putString("read_done", done.toString()).putString("read_day", WidgetStore.today()).putString("read_last", passage ? "passage" : "card").apply();
+        } catch (Exception ignored) {
+            // not logged
+        }
+    }
+
+    private static JSONArray doneToday(Context c) {
+        if (!WidgetStore.today().equals(prefs(c).getString("read_day", ""))) return new JSONArray();
+        try {
+            return new JSONArray(prefs(c).getString("read_done", "[]"));
+        } catch (Exception e) {
+            return new JSONArray();
+        }
+    }
+
+    private static boolean has(JSONArray a, String s) {
+        for (int i = 0; i < a.length(); i++) if (s.equals(a.optString(i))) return true;
         return false;
     }
 
@@ -212,6 +270,26 @@ final class GateStore {
         JSONArray q = new JSONArray(prefs(c).getString("queue", "[]"));
         q.put(new JSONObject().put("path", path).put("body", body));
         prefs(c).edit().putString("queue", q.toString()).apply();
+    }
+
+    /** Hands the notes and tasks made on the Gate to the app, which sends them through its own outbox
+     *  (all PC addresses, and they show in the app at once). Gate choices stay here. */
+    static synchronized JSONArray takeNotesTasks(Context c) {
+        JSONArray out = new JSONArray();
+        try {
+            JSONArray q = new JSONArray(prefs(c).getString("queue", "[]"));
+            JSONArray keep = new JSONArray();
+            for (int i = 0; i < q.length(); i++) {
+                JSONObject item = q.getJSONObject(i);
+                String path = item.optString("path");
+                if ("capture".equals(path) || "task".equals(path)) out.put(item);
+                else keep.put(item);
+            }
+            prefs(c).edit().putString("queue", keep.toString()).apply();
+        } catch (Exception ignored) {
+            // leave the queue as it was
+        }
+        return out;
     }
 
     /** Sends the queue in order (POST /api/<path>), keeps what failed, then refreshes the cached info. Off the main thread. */

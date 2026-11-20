@@ -13,7 +13,8 @@ export interface DayHabit {
   weekly?: number; // core habits: days out of 7
   target?: string;
   after?: string; // follows an anchor (Settings, "Your day"): its id
-  offset?: number; // minutes after that anchor
+  offset?: number; // minutes after that anchor (negative: before it)
+  remind?: boolean; // false: placed in the routine only, no reminder
   due: boolean;
   state: Mark | null;
   // Habit kinds (scripts/lib/days.mjs): which marks it offers, an amount a day, or parts at anchors of your day.
@@ -21,7 +22,7 @@ export interface DayHabit {
   unit?: string; // counted, e.g. "pages"
   goal?: number; // the daily amount that counts as done
   amount?: number | null;
-  parts?: { id: string; label: string; anchor?: string }[]; // each at an anchor of your day (its id)
+  parts?: { id: string; label: string; anchor?: string; offset?: number }[]; // each at an anchor of your day (its id)
   partMarks?: Mark[]; // marks each part offers (default: done)
   partStates?: Record<string, Mark>;
 }

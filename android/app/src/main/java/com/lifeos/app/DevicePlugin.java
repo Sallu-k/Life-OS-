@@ -285,6 +285,17 @@ public class DevicePlugin extends Plugin {
         return String.format("#%06x", color & 0xFFFFFF);
     }
 
+    /** Notes and tasks made on the Gate, for the app's own outbox: [{ path: "capture"|"task", body }]. */
+    @PluginMethod
+    public void takeGateQueue(PluginCall call) {
+        JSObject ret = new JSObject();
+        JSArray items = new JSArray();
+        JSONArray q = GateStore.takeNotesTasks(getContext());
+        for (int i = 0; i < q.length(); i++) items.put(q.optJSONObject(i));
+        ret.put("items", items);
+        call.resolve(ret);
+    }
+
     /** Sends the Gate's queue (choices, notes, tasks) and refreshes what the Gate shows. */
     @PluginMethod
     public void gateSync(PluginCall call) {

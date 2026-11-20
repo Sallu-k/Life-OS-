@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -28,13 +29,14 @@ import org.json.JSONObject;
  * The Gate: "Why now?" drawn by GateService straight on top of everything (a "Display over other apps"
  * window), not as a separate screen: OnePlus blocks apps from opening screens from the background, but not
  * this. It appears at once after an unlock, and Home cannot skip it (Unlock is always one slide away).
- * Unlock is one slide with no questions. Fun first offers your book, then asks what kind and for how
+ * Purpose is one slide with no questions. Leisure first asks you to read a little (a card, a recall
+ * question or the next passage of your long read), then offers your book, then asks what kind and for how
  * long; the session runs out and asks again. Note and Task save straight to the PC (queued when it is
  * away). The screen going off while it is open logs "skip". Every choice is logged (choice and numbers only).
  */
 final class GateOverlay {
 
-    static final String MODE_UNLOCK = "unlock", MODE_APP = "app", MODE_TIMEUP = "timeup";
+    static final String MODE_UNLOCK = "unlock", MODE_APP = "app", MODE_TIMEUP = "timeup", MODE_STILL = "still";
 
     private final Context ctx;
     private final WindowManager wm;
@@ -133,12 +135,13 @@ final class GateOverlay {
     }
 
     private String via() {
-        return MODE_APP.equals(mode) ? "app" : MODE_UNLOCK.equals(mode) ? "unlock" : null;
+        return MODE_APP.equals(mode) || MODE_STILL.equals(mode) ? "app" : MODE_UNLOCK.equals(mode) ? "unlock" : null;
     }
 
     private void start() {
         handler.removeCallbacksAndMessages(null);
         if (MODE_TIMEUP.equals(mode)) timeUp();
+        else if (MODE_STILL.equals(mode)) still();
         else dial();
     }
 
@@ -146,12 +149,27 @@ final class GateOverlay {
 
     private void dial() {
         LinearLayout col = column();
-        col.addView(title(MODE_APP.equals(mode) ? "Opening a fun app" : "Why now?"));
+        col.addView(title(MODE_APP.equals(mode) ? "Opening a leisure app" : "Why now?"));
         String context = contextLine();
         if (context != null) col.addView(text(context));
         JSONObject today = GateStore.info(ctx).optJSONObject("today");
         if (today != null) col.addView(small("Today: " + today.optInt("gates") + " unlocks, " + today.optInt("fun") + " for fun"));
-        col.addView(small("Slide the circle, or tap a word"));
+        // Note and Task: two buttons side by side; the slider below stays where the thumb is.
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        Button note = button("Note", () -> write(true));
+        Button task = button("Task", () -> write(false));
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, dp(52), 1);
+        half.setMarginEnd(dp(6));
+        note.setLayoutParams(half);
+        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, dp(52), 1);
+        half2.setMarginStart(dp(6));
+        task.setLayoutParams(half2);
+        row.addView(note);
+        row.addView(task);
+        col.addView(row);
+        boolean dual = MODE_APP.equals(mode) && pkg != null && GateStore.dual(ctx, pkg);
+        col.addView(small(dual ? "Right for a task (10 min), left for Leisure" : "Slide right for Purpose, left for Leisure"));
         // The dial fills the rest of the screen; its circle sits over the fingerprint sensor (GateDial).
         GateDial d = new GateDial(ctx, this::picked);
         col.addView(d, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -172,11 +190,131 @@ final class GateOverlay {
     }
 
     private void picked(int choice) {
-        if (choice == GateDial.UNLOCK) {
+        // The log keeps its words ("unlock" for Purpose, "fun" for Leisure), so history and Insights still match.
+        if (choice == GateDial.PURPOSE) {
             GateService.allowUnder();
             finishWith("unlock", null, 0);
-        } else if (choice == GateDial.FUN) suggest();
-        else write(choice == GateDial.NOTE);
+        } else readFirst(false);
+    }
+
+    /** A task pass in a work-and-fun app (Brave) ran out with the app still open. */
+    private void still() {
+        LinearLayout col = column();
+        col.addView(title("Still for the task?"));
+        col.addView(small("10 minutes are up."));
+        col.addView(button("Yes, 10 more min", () -> {
+            GateService.allowUnder();
+            finishWith("unlock", null, 0);
+        }));
+        col.addView(button("Task done", () -> turnedBack("done", "Good work.")));
+        col.addView(button("It's leisure now", () -> readFirst(false)));
+        show(col, false);
+    }
+
+    // ---------- Leisure: read a little first ----------
+
+    /** One thing to read: the next passage of your long read, or a card (a recall question when it is due).
+     *  "Done" opens after a few seconds per line, so it is read, not skipped. Nothing cached: straight on. */
+    private void readFirst(boolean cardOnly) {
+        JSONObject it = GateStore.nextReading(ctx, cardOnly);
+        if (it == null) {
+            suggest();
+            return;
+        }
+        String type = it.optString("type");
+        if ("passage".equals(type)) passage(it);
+        else if ("recall".equals(type) && !it.optString("q").isEmpty()) recall(it);
+        else card(it, true);
+    }
+
+    private void passage(JSONObject p) {
+        LinearLayout col = column();
+        col.addView(title("Read first"));
+        col.addView(small(p.optString("title") + " · part " + (p.optInt("index") + 1) + " of " + p.optInt("total")));
+        col.addView(reading(p.optString("text")), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        Button done = button("Done reading", () -> {
+            GateStore.readDone(ctx, "passage", GateStore.passageId(p), true);
+            suggest();
+        });
+        col.addView(done);
+        col.addView(button("Something else", () -> readFirst(true)));
+        show(col, false);
+        holdUntilRead(done, p.optString("text"));
+    }
+
+    private void card(JSONObject c, boolean log) {
+        LinearLayout col = column();
+        col.addView(title(c.optString("title")));
+        col.addView(reading(c.optString("text")), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        if (!c.optString("source").isEmpty()) col.addView(small(c.optString("source")));
+        Button done = button("Done", () -> {
+            if (log) GateStore.readDone(ctx, "read", c.optString("id"), false);
+            suggest();
+        });
+        col.addView(done);
+        show(col, false);
+        holdUntilRead(done, c.optString("text"));
+    }
+
+    /** Recall beats re-reading: the question first, then the answer, then how it went. */
+    private void recall(JSONObject c) {
+        LinearLayout col = column();
+        col.addView(small("Do you remember?"));
+        col.addView(title(c.optString("q")));
+        TextView answer = text(c.optString("a"));
+        answer.setVisibility(View.INVISIBLE);
+        col.addView(answer);
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setVisibility(View.GONE);
+        Button knew = button("Knew it", () -> {
+            GateStore.readDone(ctx, "knew", c.optString("id"), false);
+            suggest();
+        });
+        Button notYet = button("Not yet", () -> {
+            GateStore.readDone(ctx, "notyet", c.optString("id"), false);
+            card(c, false); // read it once more before moving on (already logged)
+        });
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(0, dp(56), 1);
+        l.setMarginEnd(dp(6));
+        knew.setLayoutParams(l);
+        LinearLayout.LayoutParams r = new LinearLayout.LayoutParams(0, dp(56), 1);
+        r.setMarginStart(dp(6));
+        notYet.setLayoutParams(r);
+        row.addView(knew);
+        row.addView(notYet);
+        Button reveal = button("Show answer", null);
+        reveal.setOnClickListener(v -> {
+            answer.setVisibility(View.VISIBLE);
+            reveal.setVisibility(View.GONE);
+            row.setVisibility(View.VISIBLE);
+        });
+        col.addView(reveal);
+        col.addView(row);
+        show(col, false);
+    }
+
+    /** A scrolling block of text, left-aligned and a little larger, for reading. */
+    private ScrollView reading(String s) {
+        TextView t = text(s);
+        t.setGravity(Gravity.START);
+        t.setLineSpacing(dp(4), 1f);
+        ScrollView sv = new ScrollView(ctx);
+        sv.addView(t);
+        return sv;
+    }
+
+    /** Keeps "Done" dim and off for about 3 seconds a line (60 characters), at most 30 seconds. */
+    private void holdUntilRead(Button done, String s) {
+        int seconds = Math.min(30, Math.max(3, 3 * (s.length() / 60 + 1)));
+        done.setEnabled(false);
+        done.animate().cancel(); // the step's entrance would fade it up to full
+        done.setTranslationY(0f);
+        done.setAlpha(0.4f);
+        handler.postDelayed(() -> {
+            done.setEnabled(true);
+            done.animate().alpha(1f).setDuration(200).start();
+        }, seconds * 1000L);
     }
 
     // ---------- Note / Task ----------
@@ -419,7 +557,7 @@ final class GateOverlay {
         b.setTextSize(18);
         b.setTextColor(ctx.getColor(R.color.widget_ink));
         b.setBackgroundResource(R.drawable.gate_button);
-        b.setOnClickListener(v -> onClick.run());
+        if (onClick != null) b.setOnClickListener(v -> onClick.run());
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
         lp.topMargin = dp(10);
         b.setLayoutParams(lp);

@@ -7,6 +7,7 @@ import matter from "gray-matter";
 import { backup, getDay } from "./days.mjs";
 import { getSection, setSection } from "./notes.mjs";
 import { gateBetween } from "./gate.mjs";
+import { knowledgeBetween } from "./knowledge.mjs";
 import { vaultRoot } from "./vault-write.mjs";
 
 const SCORE = { done: 1, half: 0.5, partial: 0.25, missed: 0 };
@@ -76,6 +77,8 @@ function weekStats(days) {
     needsCare: ranked.length > 1 ? ranked.at(-1)[0] : null,
     // The Gate: this week's choices, and last week's urgent unlocks to compare (a hint, never a limit).
     gate: { ...gateBetween(days[0], days[6]), urgentBefore: gateBetween(shift(days[0], -7), shift(days[6], -7)).unlock },
+    // Knowledge: cards read or recalled and passages read this week (counts only).
+    knowledge: knowledgeBetween(days[0], days[6]),
   };
 }
 

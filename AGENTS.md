@@ -9,7 +9,8 @@ The site is built from the vault (static export); a small local Node server edit
   (`scripts/lib/collections.mjs`), after backing up the old file to `<vault>/.lifeos-backup/`. Deletes go to
   `<vault>/_trash/`; replaced images go to `_assets/_old/` first. Requests not from this PC need
   `LIFEOS_TOKEN`. Edit controls appear only when `/api/health` answers.
-- The command-line helpers (`add-book`, `add-game`, `add-certificate`, `import-books`, `import-games`)
+- The command-line helpers (`add-book`, `add-game`, `add-certificate`, `import-books`, `import-games`,
+  `add-knowledge`)
   only create new notes and images, never overwrite.
 - The Android app writes only through the server, from its offline outbox (`src/lib/offline.ts`). Never
   commit an APK or its bundled site (it contains the PC addresses and token, `lifeos-pc.json`).
@@ -22,12 +23,16 @@ The site is built from the vault (static export); a small local Node server edit
   `bored_min` may be read for Insights, the weekly review and Today. The phone Gate is a foreground service
   drawing an overlay ("Display over other apps") with Usage access, never an Accessibility service (payment
   apps refuse to run beside one); it reads only which app is in front, never screen content.
+- Knowledge: cards (`Knowledge/Cards/*.md`) and long reads (`Knowledge/Reading/<book>/`, possibly from
+  copyrighted EPUBs you own) are shown only live (the Knowledge page, the phone Gate's "Read first"), never
+  built into pages. The knowledge log (`Logs/Knowledge/YYYY-MM.md`: kind and card/passage id only) may be
+  read for Insights and the weekly review as counts.
 - Security: token-free API access only for this PC's own requests (Host 127.0.0.1/localhost, no foreign
   Origin or Sec-Fetch-Site); CORS only for the app's origin; live updates are Ed25519-signed and every file
   hash-checked; the app allows no Android backups.
 - `./sample-vault` holds fake data only. Never commit real vault content.
 - No database, no login, no analytics, no external network calls at runtime, no CDN fonts or scripts.
-  (The command-line helpers call Open Library, Steam and Wikipedia when you run them.)
+  (The command-line helpers call Open Library, Steam, Wikipedia and Project Gutenberg when you run them.)
 - three.js only in `src/lib/three/` and the experience components that load it; browser-only (dynamic
   `import()`), colours from CSS variables (`src/lib/three/theme.ts`), paused when hidden, disposed on
   unmount, with the classic page as the fallback (no WebGL, touch, reduced motion).

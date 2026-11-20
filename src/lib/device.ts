@@ -22,6 +22,7 @@ interface Device {
   openGateNotification(): Promise<void>;
   openGateSettings(): Promise<void>;
   gateSync(o: { date?: string; times?: Record<string, string> }): Promise<void>;
+  takeGateQueue(): Promise<{ items: { path: "capture" | "task"; body: { text: string; date?: string; kind?: string } }[] }>;
   accentColors(): Promise<{ dark?: string; light?: string; dark2?: string; light2?: string }>;
 }
 
@@ -82,6 +83,7 @@ export interface GateStatus {
 export const gateStatus = () => withDevice((p) => p.gateStatus());
 export const gateOn = async () => (await gateStatus())?.on ?? null;
 export const gateEnable = (on: boolean) => withDevice((p) => p.gateEnable({ on }));
+export const takeGateQueue = async () => (await withDevice((p) => p.takeGateQueue()))?.items ?? [];
 export const openGateNotification = () => withDevice((p) => p.openGateNotification());
 export const openGateSettings = () => withDevice((p) => p.openGateSettings());
 export const gateSync = (date?: string, times?: Record<string, string>) => withDevice((p) => p.gateSync({ date, times }));

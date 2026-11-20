@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { backup, getDay } from "./days.mjs";
+import { session } from "./knowledge.mjs";
 import { listItems } from "./notes.mjs";
 import { getRewards } from "./rewards.mjs";
 import { readSettings } from "./settings.mjs";
@@ -113,6 +114,9 @@ export function gateInfo(today) {
     bank: getRewards(today).bank,
     // The next open task today (its text is shown on the phone's Gate only, never stored in the log).
     nextTask: nextTaskOf(today),
+    // What the Gate shows before leisure (cached on the phone, so it works offline): a few cards and the
+    // next passage of the current long read.
+    knowledge: knowledgeOf(today),
     today: countGate(events.filter((e) => e.date === today)),
     week: countGate(events.filter((e) => e.date >= monday)),
     lastWeek: countGate(events.filter((e) => e.date < monday)),
@@ -130,6 +134,14 @@ function nextTaskOf(today) {
     const open = getDay(today).tasks.filter((t) => !t.done);
     open.sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
     return open[0] ? `${open[0].time ? `${open[0].time} ` : ""}${open[0].text}`.slice(0, 80) : null;
+  } catch {
+    return null;
+  }
+}
+
+function knowledgeOf(today) {
+  try {
+    return session(today, 4);
   } catch {
     return null;
   }

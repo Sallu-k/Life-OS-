@@ -26,6 +26,7 @@ interface Review {
     fun: number;
     strongest: string | null;
     needsCare: string | null;
+    knowledge?: { cards: number; knew: number; notyet: number; passages: number };
     gate?: { gates: number; unlock: number; fun: number; read: number; more: number; funMinutes: number; urgentBefore: number };
   };
   wins: string;
@@ -119,6 +120,12 @@ export function WeeklyReview() {
             {tile("Tasks done", s.tasksDone)}
           </div>
           {s.gate && s.gate.gates > 0 && <GateWeek g={s.gate} />}
+          {s.knowledge && s.knowledge.cards + s.knowledge.passages > 0 && (
+            <p className="text-sm text-ink-dim">
+              Knowledge: <span className="text-ink">{s.knowledge.cards}</span> cards, {s.knowledge.passages} passages read
+              {s.knowledge.knew + s.knowledge.notyet > 0 && `, recalled ${s.knowledge.knew} of ${s.knowledge.knew + s.knowledge.notyet}`}.
+            </p>
+          )}
           {(s.strongest || s.needsCare) && (
             <p className="text-sm text-ink-dim">
               {s.strongest && (

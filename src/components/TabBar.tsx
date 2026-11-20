@@ -16,6 +16,7 @@ const TABS = [
 ];
 const MORE = [
   { href: "/", label: "Home" },
+  { href: "/knowledge/", label: "Knowledge" },
   { href: "/library/", label: "Library" },
   { href: "/games/", label: "Games" },
   { href: "/certificates/", label: "Certificates" },

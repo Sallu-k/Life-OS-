@@ -90,7 +90,13 @@ export function writeHabits(list) {
       out.parts = h.parts.slice(0, 12).map((p, j) => {
         const pid = slugify(String(p.id || p.label || ""));
         if (!pid) throw new Error(`habit "${id}": part ${j + 1} needs a name`);
-        return { id: pid, label: String(p.label || pid).trim(), ...(typeof p.anchor === "string" && /^[a-z0-9-]{1,60}$/.test(p.anchor) ? { anchor: p.anchor } : {}) };
+        const off = Number(p.offset);
+        return {
+          id: pid,
+          label: String(p.label || pid).trim(),
+          ...(typeof p.anchor === "string" && /^[a-z0-9-]{1,60}$/.test(p.anchor) ? { anchor: p.anchor } : {}),
+          ...(Number.isInteger(off) && off !== 0 ? { offset: Math.max(-180, Math.min(180, off)) } : {}),
+        };
       });
       const pm = Array.isArray(h.partMarks) ? ["done", "half", "missed"].filter((m) => h.partMarks.includes(m)) : [];
       if (pm.length) out.partMarks = pm;
@@ -101,6 +107,7 @@ export function writeHabits(list) {
       const weekly = Number(h.weekly ?? 5);
       out.weekly = Number.isInteger(weekly) ? Math.max(1, Math.min(7, weekly)) : 5;
     }
+    if (h.remind === false) out.remind = false; // placed in the routine only (Today's order), no reminder
     // Follows an anchor (Settings, "Your day"): remind `offset` minutes after that anchor's time.
     if (typeof h.after === "string" && /^[a-z0-9-]{1,60}$/.test(h.after)) {
       out.after = h.after;
@@ -588,6 +595,18 @@ export function editTask(where, index, changes) {
   }
   setTasks(note, tasks);
   writeDay(where, note);
+}
+
+// ---------- notes: the Inbox, newest first (Today's Notes tab; private, shown live only) ----------
+export function readNotes(limit = 400) {
+  const file = join(vaultRoot(), "Inbox", "Inbox.md");
+  if (!existsSync(file)) return [];
+  const notes = [];
+  for (const line of readFileSync(file, "utf8").split(/\r?\n/)) {
+    const m = /^- (\d{4}-\d{2}-\d{2})(?: (\d{2}:\d{2}))? (.+)$/.exec(line.trim());
+    if (m) notes.push({ date: m[1], time: m[2] ?? null, text: m[3] });
+  }
+  return notes.reverse().slice(0, limit);
 }
 
 // ---------- quick capture ----------

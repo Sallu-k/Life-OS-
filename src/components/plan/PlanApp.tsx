@@ -15,7 +15,8 @@ import { addToPlan, editInPlan, feelEdit, leavesList } from "./planEdits";
 
 // The Plan page: tasks on any date (with times, deadlines and repeats), a Someday list, and goals for the
 // year, month and week. Loaded live from the LifeOS server; the phone app keeps a copy and queues changes.
-export function PlanApp() {
+// `tasksOnly` (Today's Tasks tab): the add box and every open task, deadlines first; no goals.
+export function PlanApp({ tasksOnly = false }: { tasksOnly?: boolean }) {
   const server = useServer();
   const app = useIsApp();
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -132,10 +133,10 @@ export function PlanApp() {
       <div className="grid gap-6 lg:grid-cols-[1.25fr_1fr]">
         <div className="flex flex-col gap-6">
           <AddTask onAdd={addTask} />
-          <Agenda plan={plan} onEdit={editTask} />
+          <Agenda plan={plan} onEdit={editTask} deadlinesFirst={tasksOnly} />
         </div>
         <div className="flex flex-col gap-6">
-          {ids && <Goals ids={ids} goals={{ year: goalsFor("year"), month: goalsFor("month"), week: goalsFor("week") }} onPeriod={showPeriod} onSave={saveGoals} />}
+          {ids && !tasksOnly && <Goals ids={ids} goals={{ year: goalsFor("year"), month: goalsFor("month"), week: goalsFor("week") }} onPeriod={showPeriod} onSave={saveGoals} />}
         </div>
       </div>
     </div>

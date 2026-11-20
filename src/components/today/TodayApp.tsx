@@ -1,5 +1,6 @@
 "use client";
 
+import { SaveLine } from "@/components/knowledge/SaveLine";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, useIsApp, useServer } from "@/lib/api";
 import { isLockedNow, stamp, type MissedReason } from "@/lib/dayRules";
@@ -8,7 +9,7 @@ import { dayLabel } from "@/lib/format";
 import { loadDay, outbox, queue, savedDay, send } from "@/lib/offline";
 import { scheduleReminders } from "@/lib/phoneReminders";
 import { savedSetup } from "@/lib/anchors";
-import { boredMinutes, gateOn, gateSync, lastNight, phoneScreenHours, takeWidgetTicks, updateWidget } from "@/lib/device";
+import { boredMinutes, gateOn, gateSync, lastNight, phoneScreenHours, takeGateQueue, takeWidgetTicks, updateWidget } from "@/lib/device";
 import type { GameSnapshot } from "@/lib/vault/gameData";
 import { DayState } from "./DayState";
 import { FunList } from "./FunList";
@@ -20,13 +21,21 @@ import { markFromAmount, markFromParts } from "./habitKinds";
 import { TodaySummary } from "./TodaySummary";
 import { HabitManager } from "./HabitManager";
 import { markSeen, reactFun, reactMark, reactSaved, reactTask, type FeelContext } from "./reactions";
-import { TodayTasks } from "./TodayTasks";
+import { NotesTab } from "./NotesTab";
+import { PlanApp } from "@/components/plan/PlanApp";
 import { Incentives } from "./Incentives";
 import { SecondDate } from "./SecondDate";
 import { localToday, shift, type Day, type Mark, type Task } from "./types";
 import { useReminders } from "./useReminders";
 
-// The Today screen: due habits, tasks, the day's numbers, journal and quick capture.
+type Tab = "today" | "tasks" | "notes";
+const TABS: [Tab, string][] = [
+  ["today", "Today"],
+  ["tasks", "Tasks"],
+  ["notes", "Notes"],
+];
+
+// The Today screen, in three tabs: Today (summary, habits, the day's cards), Tasks (every open task) and Notes.
 // Changes are applied on screen at once, kept on the device and sent to the LifeOS server (lib/offline.ts),
 // so the phone app keeps working without the PC and catches up when it can reach it again.
 // `game` comes from the build; when the PC answers, its current setting wins.
@@ -46,6 +55,25 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [setup, setSetup] = useState(false);
+  // Three tabs: Today (summary and habits), Tasks (every open task, deadlines first), Notes (by date).
+  const [tab, setTab] = useState<Tab>("today");
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("lifeos-today-tab") as Tab | null;
+      if (saved && TABS.some(([k]) => k === saved)) setTab(saved);
+    } catch {
+      // no storage: start on Today
+    }
+  }, []);
+  const pickTab = (next: Tab) => {
+    feel("select");
+    setTab(next);
+    try {
+      localStorage.setItem("lifeos-today-tab", next);
+    } catch {
+      // not remembered
+    }
+  };
   // Unlocking a finished day lasts until you leave that day.
   const [unlocked, setUnlocked] = useState(false);
   useEffect(() => setUnlocked(false), [date]);
@@ -77,6 +105,18 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
   async function phoneSync(today: Day) {
     await updateWidget(today.date, today.habits); // also gives the Gate the PC address and token
     void gateOn().then(() => gateSync(today.date, Object.fromEntries(place.anchors.map((a) => [a.label, a.time])))); // also logs "off" once if the Gate was switched off
+    // Notes and tasks made on the Gate join the app's outbox: they show here at once and reach the PC
+    // through whichever address answers (the Gate alone could only try one).
+    let current = today;
+    for (const item of await takeGateQueue()) {
+      if (item.path === "task") {
+        const date = item.body.date ?? today.date;
+        const task: Task = { done: false, text: item.body.text, time: null, priority: null, index: current.tasks.length, date };
+        current = date === today.date ? { ...current, tasks: [...current.tasks, task] } : current;
+        queue({ kind: "taskAdd", date, body: { text: item.body.text } }, current);
+      } else send({ kind: "post", path: "capture", body: item.body });
+    }
+    if (current !== today) setDay(current);
     const ticks = await takeWidgetTicks();
     for (const t of ticks) {
       const cached = t.date === today.date ? { ...today, habits: today.habits.map((h) => (h.id === t.id ? { ...h, state: t.state as Mark | null } : h)) } : today;
@@ -194,6 +234,17 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
   const isToday = date === localToday();
   return (
     <div className="flex flex-col gap-6">
+      <div className="today-tabs" role="tablist" aria-label="Today">
+        {TABS.map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={tab === key} className="today-tab" onClick={() => pickTab(key)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "tasks" && <PlanApp tasksOnly />}
+      {tab === "notes" && <NotesTab />}
+      {tab === "today" && (
+        <>
       <div className="today-bar">
         <div className="today-nav">
           <button type="button" className="chip" onClick={() => setDate(shift(date, -1))} aria-label="Previous day">
@@ -218,44 +269,36 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
           </button>
         </div>
       </div>
-      {error && <p className="text-sm text-copper">{error}</p>}
-      <SyncBadge online={online} waiting={waiting} />
-
-      {!day ? (
-        <p className="text-ink-dim">
-          {!loaded ? "Loading…" : "Can't reach the PC yet and nothing is saved on this device. Check the PC address and token on the Settings page, and that the PC is on with Tailscale running."}
-        </p>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {!day.future && <TodaySummary day={day} place={place} />}
-          {isToday && <ReviewPrompt />}
-          <DayState
-            date={date}
-            future={day.future}
-            locked={isLockedNow(day.lockAt)}
-            unlocked={unlocked}
-            finished={day.finished}
-            lockAt={day.lockAt}
-            isToday={isToday}
-            onFinish={finish}
-            onUnlock={() => (feel("open"), setUnlocked(true))}
-            onRelock={() => (feel("close"), setUnlocked(false))}
-          />
-          {isToday && <Incentives day={day} game={game} onSave={(c) => change({ kind: "day", date, body: c }, { ...day, ...c })} />}
-        <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-          <div className="flex flex-col gap-6">
-            {!day.future && <HabitList date={date} place={place} habits={day.habits} readOnly={readOnly} missed={day.missed} logged={day.logged} onMark={mark} onPart={markPart} onAmount={setAmount} onReason={reason} />}
-            {!day.future && <MoodSleep day={day} readOnly={readOnly} onSave={save} />}
-            {!day.future && <Numbers day={day} readOnly={readOnly} onSave={save} />}
-            {!day.future && <FunList key={date} items={day.fun} readOnly={readOnly} onChange={saveFun} />}
-          </div>
-          <div className="flex flex-col gap-6">
-            <TodayTasks date={date} dayTasks={day.tasks} onDayEdit={editTask} place={place} />
-            {!day.future && <Journal key={date} day={day} readOnly={readOnly} onSave={save} />}
-            <Capture />
-          </div>
-        </div>
-        </div>
+          {error && <p className="text-sm text-copper">{error}</p>}
+          <SyncBadge online={online} waiting={waiting} />
+          {!day ? (
+            <p className="text-ink-dim">
+              {!loaded ? "Loading…" : "Can't reach the PC yet and nothing is saved on this device. Check the PC address and token on the Settings page, and that the PC is on with Tailscale running."}
+            </p>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {!day.future && <TodaySummary day={day} place={place} />}
+              {isToday && <ReviewPrompt />}
+              <DayState
+                date={date}
+                future={day.future}
+                locked={isLockedNow(day.lockAt)}
+                unlocked={unlocked}
+                finished={day.finished}
+                lockAt={day.lockAt}
+                isToday={isToday}
+                onFinish={finish}
+                onUnlock={() => (feel("open"), setUnlocked(true))}
+                onRelock={() => (feel("close"), setUnlocked(false))}
+              />
+              {!day.future && <HabitList date={date} place={place} habits={day.habits} readOnly={readOnly} missed={day.missed} logged={day.logged} onMark={mark} onPart={markPart} onAmount={setAmount} onReason={reason} />}
+              {isToday && <Incentives day={day} game={game} onSave={(c) => change({ kind: "day", date, body: c }, { ...day, ...c })} />}
+              {!day.future && <MoodSleep day={day} readOnly={readOnly} onSave={save} />}
+              {!day.future && <Numbers day={day} readOnly={readOnly} onSave={save} />}
+              {!day.future && <FunList key={date} items={day.fun} readOnly={readOnly} onChange={saveFun} />}
+            </div>
+          )}
+        </>
       )}
       {setup && <HabitManager onClose={(saved) => (setSetup(false), saved && load())} />}
     </div>
@@ -313,6 +356,7 @@ function Numbers({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
           </select>
         </label>
       )}
+      {!readOnly && <SaveLine books={reading} />}
     </Fold>
   );
 }
@@ -342,59 +386,6 @@ function MeasuredScreen({ day, readOnly, onSave }: { day: Day; readOnly: boolean
       )}
       {extra && <span>· {extra}</span>}
     </p>
-  );
-}
-
-function Journal({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSave(c: Partial<Day>): void }) {
-  const [journal, setJournal] = useState(day.journal);
-  const [keep, setKeep] = useState(day.keep);
-  const [saved, setSaved] = useState(true);
-  const dirty = () => setSaved(false);
-  const save = (e: React.MouseEvent<HTMLButtonElement>) => {
-    onSave({ journal, keep });
-    setSaved(true);
-    reactSaved(e.currentTarget);
-  };
-  return (
-    <Fold id="journal" title="Journal" summary={journal.trim() ? "Written · private" : "Private · never shown on the site"}>
-      <textarea className="today-input min-h-40" disabled={readOnly} value={journal} onChange={(e) => (setJournal(e.target.value), dirty())} placeholder="How did the day go?" />
-      <label className="edit-field">
-        <span>Keep line (shown on the Habits page)</span>
-        <input className="today-input" disabled={readOnly} value={keep} onChange={(e) => (setKeep(e.target.value), dirty())} placeholder="One line worth keeping" />
-      </label>
-      <button type="button" className="chip edit-primary w-fit" onClick={save} disabled={saved || readOnly}>
-        {saved ? "Saved" : "Save journal"}
-      </button>
-    </Fold>
-  );
-}
-
-function Capture() {
-  const [text, setText] = useState("");
-  const [msg, setMsg] = useState("");
-  async function send(kind: "inbox" | "brainstorm") {
-    if (!text.trim()) return;
-    try {
-      const r = await api<{ saved: string }>("capture", { method: "POST", body: { kind, text } });
-      setMsg(`Saved to ${r.saved}`);
-      setText("");
-    } catch (e) {
-      setMsg((e as Error).message);
-    }
-  }
-  return (
-    <Fold id="capture" title="Quick capture" summary="To Inbox or a Brainstorm idea">
-      <textarea className="today-input min-h-20" value={text} onChange={(e) => setText(e.target.value)} placeholder="A thought, an idea, something to look up…" />
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className="chip" onClick={() => send("inbox")}>
-          To Inbox
-        </button>
-        <button type="button" className="chip" onClick={() => send("brainstorm")}>
-          New Brainstorm idea
-        </button>
-        <span className="text-xs text-ink-dim">{msg}</span>
-      </div>
-    </Fold>
   );
 }
 

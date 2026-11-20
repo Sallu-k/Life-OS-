@@ -60,11 +60,10 @@ export function HabitList(props: Props) {
   // A group opens by itself when something in it is still open and its time has come (any time on past days).
   const now = new Date();
   const nowHm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  // The anchor you are in now (the last one whose time has come) comes first; the rest keep their order.
-  if (date === localToday()) {
-    const current = [...groups].reverse().find((g) => g.time && g.time <= nowHm && g.items.length);
-    if (current) groups.splice(0, 0, ...groups.splice(groups.indexOf(current), 1));
-  }
+  // Your routine order: groups in the order of the day; inside a group, what comes before the anchor
+  // (negative offset), then the anchor itself, then what comes after (stable, so ties keep the list order).
+  const offsetOf = (i: Item) => (i.part ? (i.part.offset ?? 0) : (i.habit.offset ?? 0));
+  for (const g of groups) if (g.key !== "any") g.items.sort((a, b) => offsetOf(a) - offsetOf(b));
   // Open by themselves: the current anchor's group and "Any time" (while something is unmarked); on a past
   // day every group with something unmarked. Earlier and later anchors stay folded until tapped.
   const currentKey = date === localToday() ? [...groups].reverse().find((g) => g.time && g.time <= nowHm && g.items.length)?.key : undefined;

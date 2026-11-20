@@ -147,7 +147,7 @@ async function schedule(today: Day, place?: DaySetup): Promise<string> {
       add(key, beforeBed(date, sleep.by, ROUTINE.lightsOut), `Lights out in 15 min`, `In bed by ${sleep.by}.`, { kind: "habit", date, id: sleep.habit, key });
     }
     for (const h of today.habits) {
-      if (routine.has(h.id)) continue;
+      if (routine.has(h.id) || h.remind === false) continue; // placed in the routine only, no reminder
       const time = habitTime(h, date, place); // fixed time, or minutes after its anchor
       if (!h.active || !time || !dueOn(h.days, date)) continue;
       if (n === 0 && h.state !== null) continue; // already logged today

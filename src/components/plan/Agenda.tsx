@@ -35,8 +35,14 @@ export function taskMeta(t: Task, showPlace: boolean): string[] {
   ].filter(Boolean) as string[];
 }
 
-export function Agenda({ plan, onEdit }: { plan: Pick<Plan, "tasks" | "overdue" | "someday">; onEdit: OnEdit }) {
-  const groups = groupTasks(plan, false);
+// `deadlinesFirst` (Today's Tasks tab): open tasks with a deadline come first in their own group, soonest first.
+export function Agenda({ plan, onEdit, deadlinesFirst = false }: { plan: Pick<Plan, "tasks" | "overdue" | "someday">; onEdit: OnEdit; deadlinesFirst?: boolean }) {
+  let groups = groupTasks(plan, false);
+  if (deadlinesFirst) {
+    const isDeadline = (t: Task) => Boolean(t.deadline) && !t.done;
+    const deadlines = groups.flatMap((g) => g.tasks.filter(isDeadline)).sort((a, b) => a.date.localeCompare(b.date));
+    groups = [{ key: "deadlines", title: "Deadlines", tasks: deadlines }, ...groups.map((g) => ({ ...g, tasks: g.tasks.filter((t) => !isDeadline(t)) }))];
+  }
   const empty = groups.every((g) => g.tasks.length === 0);
   return (
     <section aria-labelledby="agenda-heading" className="card p-4 sm:p-5">

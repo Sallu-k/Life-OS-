@@ -92,7 +92,8 @@ export function HabitManager({ onClose }: { onClose(saved: boolean): void }) {
                     <div className="flex items-center gap-2">
                       <input className="today-input flex-1" value={h.label} onChange={(e) => update(i, { label: e.target.value })} aria-label="Name" />
                       <label className="flex items-center gap-1 text-xs text-ink-dim">
-                        <input type="checkbox" checked={h.active} onChange={(e) => update(i, { active: e.target.checked })} /> active
+                        <input type="checkbox" checked={h.active} onChange={(e) => update(i, { active: e.target.checked })} title="Switch off to retire it: it leaves Today, its history is kept" />{" "}
+                        {h.active ? "In use" : "Retired"}
                       </label>
                     </div>
                     <div className="flex flex-wrap gap-1" role="group" aria-label="Days">

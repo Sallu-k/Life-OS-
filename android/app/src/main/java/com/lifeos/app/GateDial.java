@@ -8,8 +8,8 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /**
- * The Gate's slider: a circle in the middle and four choices around it. Drag the circle toward a choice
- * (or tap the choice's word) to pick it. Up = Unlock, left = Fun, right = Note, down = Task.
+ * The Gate's slider: a circle with a choice on each side. Drag the circle toward a choice (or tap the
+ * choice's word) to pick it. Right = Purpose, left = Leisure.
  */
 final class GateDial extends View {
 
@@ -17,9 +17,11 @@ final class GateDial extends View {
         void pick(int choice);
     }
 
-    static final int UNLOCK = 0, FUN = 1, NOTE = 2, TASK = 3;
-    private static final String[] LABELS = { "Unlock", "Fun", "Note", "Task" };
-    private static final float[][] DIR = { { 0, -1 }, { -1, 0 }, { 1, 0 }, { 0, 1 } };
+    // Two directions: right for Purpose (something needs doing), left for Leisure (fun). Note and Task are
+    // buttons on the Gate itself (GateOverlay).
+    static final int PURPOSE = 0, LEISURE = 1;
+    private static final String[] LABELS = { "Purpose", "Leisure" };
+    private static final float[][] DIR = { { 1, 0 }, { -1, 0 } };
 
     private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint knob = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -51,11 +53,11 @@ final class GateDial extends View {
         hot.setFakeBoldText(true);
         hot.setTextSize(23 * dp);
         glow.setColor(c.getColor(R.color.widget_brass));
-        setContentDescription("Choose: slide up for Unlock, left for Fun, right for Note, down for Task. Or tap a word.");
+        setContentDescription("Choose: slide right for Purpose, left for Leisure. Or tap a word.");
     }
 
     private float reach() {
-        return getWidth() * 0.27f;
+        return getWidth() * 0.23f; // leaves room for a word on each side
     }
 
     /** Where the fingerprint sensor is, as a share of the screen height (many phones have it in the display, low down). */
@@ -74,8 +76,8 @@ final class GateDial extends View {
     private int leaning() {
         float dist = (float) Math.hypot(dx, dy);
         if (dist < reach() * 0.25f) return -1;
-        if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? FUN : NOTE;
-        return dy < 0 ? UNLOCK : TASK;
+        if (Math.abs(dy) > Math.abs(dx)) return -1; // up or down means nothing
+        return dx > 0 ? PURPOSE : LEISURE;
     }
 
     @Override
@@ -85,9 +87,9 @@ final class GateDial extends View {
         int lean = leaning();
         float pull = Math.min(1f, (float) Math.hypot(dx, dy) / r); // 0 in the middle, 1 at the edge
         text.setAlpha(lean >= 0 ? 110 : 255); // the other choices step back while one is chosen
-        for (int i = 0; i < 4; i++) {
-            float x = cx + DIR[i][0] * (r + text.getTextSize() * 1.6f);
-            float y = cy + DIR[i][1] * (r + text.getTextSize() * 1.2f) + text.getTextSize() / 3;
+        for (int i = 0; i < LABELS.length; i++) {
+            float x = cx + DIR[i][0] * labelOffset(i);
+            float y = cy + text.getTextSize() / 3;
             c.drawText(LABELS[i], x, y, i == lean ? hot : text);
         }
         // A soft halo that grows as the circle is pulled, then the circle itself (a little larger while held).
@@ -162,12 +164,18 @@ final class GateDial extends View {
     /** A tap outside the circle picks the choice on that side. */
     /** The word under the finger (x, y from the circle's middle), or -1: only close to a word counts. */
     private int tappedLabel(float x, float y) {
-        float r = reach(), ts = text.getTextSize(), hit = ts * 2f;
-        for (int i = 0; i < 4; i++) {
-            float lx = DIR[i][0] * (r + ts * 1.6f), ly = DIR[i][1] * (r + ts * 1.2f);
-            if (Math.hypot(x - lx, y - ly) < hit) return i;
+        float ts = text.getTextSize();
+        for (int i = 0; i < LABELS.length; i++) {
+            float lx = DIR[i][0] * labelOffset(i);
+            if (Math.abs(x - lx) < hot.measureText(LABELS[i]) / 2 + ts && Math.abs(y) < ts * 1.5f) return i;
         }
         return -1;
+    }
+
+    /** How far a word's middle is from the circle's middle: just outside the ring, never off the screen. */
+    private float labelOffset(int i) {
+        float half = hot.measureText(LABELS[i]) / 2;
+        return Math.min(reach() + text.getTextSize() * 0.6f + half, getWidth() / 2f - half - 4);
     }
 
     private void done(int choice) {
