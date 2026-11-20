@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { isApp } from "@/lib/api";
 import { loadBundledPc } from "@/lib/connect";
+import { syncPhoneAccent } from "@/lib/device";
 import { primeFeel } from "@/lib/feel/sounds";
 
 // Gets sound ready on the first tap. In the Android app: picks up the PC details built into the app
@@ -15,6 +16,7 @@ export function AppStart() {
     if (!isApp()) return;
     document.documentElement.dataset.app = "android";
     void loadBundledPc();
+    void syncPhoneAccent();
     let first = true;
     try {
       first = !sessionStorage.getItem("lifeos-started");

@@ -6,6 +6,8 @@ import { TabBar } from "@/components/TabBar";
 import { QuickAdd } from "@/components/QuickAdd";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { PhoneExtras } from "@/components/PhoneExtras";
+import { loadSettings } from "@/lib/vault/settings";
+import { ACCENT_SCRIPT } from "@/lib/accent";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +17,7 @@ export const metadata: Metadata = {
   // Raster icons too: Windows uses them for the app window and taskbar (it cannot use the SVG favicon).
   icons: {
     icon: [
-      { url: "/icons/lifeos.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-32.png", type: "image/png", sizes: "32x32" },
       { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
     ],
     apple: "/icons/icon-192.png",
@@ -31,10 +33,15 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, view
 const ROUTE_FIX = String.raw`(function(){var p=location.pathname;if(/\/index\.html$/.test(p))history.replaceState(null,"",p.slice(0,-10)+location.search+location.hash)})()`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // The accent picked in Settings is built into every page; the phone's wallpaper colour (saved on the
+  // device) replaces it before the first paint (ACCENT_SCRIPT).
+  const accent = loadSettings().accent;
+  const style = accent ? ({ "--accent-dark": accent, "--accent-light": accent } as React.CSSProperties) : undefined;
   return (
-    <html lang="en">
+    <html lang="en" style={style}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: ROUTE_FIX }} />
+        <script dangerouslySetInnerHTML={{ __html: ACCENT_SCRIPT }} />
       </head>
       <body>
         <a href="#content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-surface focus:px-4 focus:py-2 focus:text-ink">

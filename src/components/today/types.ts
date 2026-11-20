@@ -16,6 +16,14 @@ export interface DayHabit {
   offset?: number; // minutes after that anchor
   due: boolean;
   state: Mark | null;
+  // Habit kinds (scripts/lib/days.mjs): which marks it offers, an amount a day, or parts at anchors of your day.
+  marks?: Mark[]; // default: done, half, showed up, not done ("not applicable" is a long-press)
+  unit?: string; // counted, e.g. "pages"
+  goal?: number; // the daily amount that counts as done
+  amount?: number | null;
+  parts?: { id: string; label: string; anchor?: string }[]; // each at an anchor of your day (its id)
+  partMarks?: Mark[]; // marks each part offers (default: done)
+  partStates?: Record<string, Mark>;
 }
 
 export interface Task {
@@ -53,6 +61,8 @@ export interface Day {
   pagesBook?: string | null; // the book today's pages went to
   pcHours?: number | null; // measured on the PC (keyboard/mouse active)
   phoneHours?: number | null; // measured on the phone (Android usage access)
+  gate?: { gates: number; fun: number; funMinutes: number }; // the Gate's counts for the day
+  boredMin?: number | null; // longest phone-free stretch 08:00-22:00, minutes (measured on the phone)
   habits: DayHabit[];
   tasks: Task[];
   carried: Task[];

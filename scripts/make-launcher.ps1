@@ -14,6 +14,9 @@ $code = @"
 using System.Diagnostics;
 [assembly: System.Reflection.AssemblyTitle("LifeOS")]
 [assembly: System.Reflection.AssemblyProduct("LifeOS")]
+[assembly: System.Reflection.AssemblyCompany("LifeOS")]
+[assembly: System.Reflection.AssemblyCopyright("LifeOS")]
+[assembly: System.Reflection.AssemblyFileVersion("1.0.0.0")]
 public static class LifeOSLauncher {
   public static void Main() {
     var start = new ProcessStartInfo("powershell.exe",

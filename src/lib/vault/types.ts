@@ -106,6 +106,7 @@ export interface DailyRecord {
   mood: number | null; // 1-5 (Today's "How was the day?")
   sleep: number | null; // hours slept
   bedtime: string | null; // "HH:MM" went to sleep that evening (measured by the phone)
+  boredMin: number | null; // longest phone-free stretch 08:00-22:00, minutes (measured by the phone)
   missed: Record<string, string>; // habit id -> reason it was not done (tired, busy, ...)
 }
 

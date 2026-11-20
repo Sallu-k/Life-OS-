@@ -1,5 +1,6 @@
 "use client";
 
+import { Fold } from "./Fold";
 import { useState } from "react";
 import { FUN_KINDS, formatFun, funLabel, parseFun, type FunKind } from "@/lib/fun";
 import { feel } from "@/lib/feel/sounds";
@@ -30,13 +31,7 @@ export function FunList({ items, readOnly = false, onChange }: { items: string[]
   }
 
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="fun-heading">
-      <div className="flex items-baseline justify-between">
-        <h2 id="fun-heading" className="font-serif text-xl text-ink">
-          Fun
-        </h2>
-        <span className="text-xs text-ink-dim">Games, shows, films, outings</span>
-      </div>
+    <Fold id="fun" title="Fun" summary={items.length ? `${items.length} today` : "Games, shows, films, outings"}>
 
       {items.length > 0 && (
         <ul className="flex flex-col gap-1.5">
@@ -91,6 +86,6 @@ export function FunList({ items, readOnly = false, onChange }: { items: string[]
           </button>
         </form>
       )}
-    </section>
+    </Fold>
   );
 }

@@ -1,7 +1,7 @@
 # LifeOS on the PC. Nothing here needs a terminal: the shortcuts made by "Setup LifeOS.cmd" run it hidden.
 #   pc-app.ps1              make sure LifeOS is running, then open the app window (Edge app mode)
 #   pc-app.ps1 -ServerOnly  make sure LifeOS is running (used at Windows sign-in, so the phone can sync)
-#   pc-app.ps1 -Keeper      the background keeper: runs the server and starts it again if it ever stops
+#   pc-app.ps1 -Keeper      the background keeper: runs the server and the Gate, and starts them again if they stop
 #   pc-app.ps1 -Stop        stop LifeOS (keeper and server)
 param([switch]$ServerOnly, [switch]$Keeper, [switch]$Stop)
 
@@ -29,18 +29,28 @@ if ($Stop) {
   if (Test-Keeper) { Stop-Process -Id ([int](Get-Content $keeperPid)) -Force -Confirm:$false -ErrorAction SilentlyContinue }
   Remove-Item $keeperPid -ErrorAction SilentlyContinue
   Stop-Port
+  Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like "*pc-gate.ps1*" } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -Confirm:$false -ErrorAction SilentlyContinue }
   exit 0
 }
 
 if ($Keeper) {
-  # Runs until stopped: starts the server, and if it ever exits, starts it again after 5 seconds.
+  # Runs until stopped: keeps the server running (started again 5 seconds after it exits) and the Gate
+  # (pc-gate.ps1, the "why now?" screen after sign-in and every unlock). The first Gate shows at once.
   $PID | Set-Content $keeperPid
   $node = (Get-Command node -ErrorAction Stop).Source
+  $server = $null
+  $gate = $null
+  $gateArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSScriptRoot\pc-gate.ps1`" -AtStart"
   while ($true) {
-    if (-not (Test-Server)) {
+    if (-not (Test-Server) -and (-not $server -or $server.HasExited)) {
       "$(Get-Date -Format s) starting LifeOS" | Add-Content (Join-Path $logDir "keeper.log")
-      Start-Process -FilePath $node -ArgumentList "scripts/lifeos-server.mjs" -WorkingDirectory $repo -WindowStyle Hidden -Wait `
+      $server = Start-Process -FilePath $node -ArgumentList "scripts/lifeos-server.mjs" -WorkingDirectory $repo -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput (Join-Path $logDir "server.log") -RedirectStandardError (Join-Path $logDir "server-errors.log")
+    }
+    if (-not $gate -or $gate.HasExited) {
+      $gate = Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $gateArgs -PassThru
+      $gateArgs = $gateArgs -replace " -AtStart$", ""  # a restarted Gate waits for the next unlock
     }
     Start-Sleep -Seconds 5
   }

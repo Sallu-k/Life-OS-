@@ -4,38 +4,73 @@
    Themes. Every colour and font lives here as a variable; components only use the tokens.
    Each section picks its theme with <main data-theme="..."> and the whole page follows
    (header, footer and background too), via :root:has(...). No script, no flash.
-     Home             -> home       (a blend of every section's colours)
-     Library + books  -> brass      (warm brass and wood, default, no data-theme)
-     Games            -> arcade     (retro-future arcade)
-     Habits           -> minimal    (light paper)
+     Everyday pages   -> Oxygen (the default; "home" and "minimal" are the same look): like the
+                         OxygenOS/ColorOS style - system font, big rounded cards, light or
+                         dark with the device, and one accent colour: the phone wallpaper's (Material
+                         You, read by the app) or the one picked in Settings on the PC (--accent-*).
+     Games            -> arcade     (retro-future)
      Certificates     -> gallery    (museum wall)
      Achievements     -> trophy     (burgundy and gold trophy room)
-     Life areas       -> dashboard  (dark blue status panel, spider graph)
+     Balance          -> Oxygen too (the old dashboard theme is kept for reference)
    ============================================================ */
 
-/* Brass: warm brass and copper on dark wood, with a cool teal glow for interactive bits. The default. */
+/* Oxygen: dark by default (light below when the device is light). --accent-dark / --accent-light are set
+   on <html> from Settings (built in) and, in the phone app, from the wallpaper (src/lib/accent.ts). */
 :root {
-  --bg: #11100f;
-  --surface: #1b1917;
-  --surface-hi: #272320;
-  --brass: #c8913a;
-  --copper: #b5653a;
-  --glow: #4fe3d8; /* teal glow: hover, focus and active states only */
-  --hex-line: #dcb765; /* thin gold linework */
-  --ink: #ede4d3;
-  --ink-dim: #a89c88;
+  --accent: var(--accent-dark, #8ab4ff);
+  --bg: #0b0b0d;
+  --surface: #1c1c1f;
+  --surface-hi: #2a2a2e;
+  --brass: var(--accent); /* "brass" is the accent token every component uses */
+  --copper: #9a9aa2;
+  --glow: var(--accent); /* hover, focus and active states */
+  --hex-line: var(--accent);
+  --ink: #f2f2f4;
+  --ink-dim: #9b9ba3;
+  --card-radius: 1.4rem;
 
-  --font-book: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-  --font-label: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-book: system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+  --font-label: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --title-case: none;
-  --title-spacing: -0.01em;
-  --title-weight: 400;
+  --title-spacing: -0.02em;
+  --title-weight: 650;
   --title-shadow: none;
-  --page-bg:
-    radial-gradient(60rem 30rem at 50% -8rem, color-mix(in srgb, var(--brass) 14%, transparent), transparent 70%),
-    radial-gradient(40rem 30rem at 100% 100%, color-mix(in srgb, var(--copper) 7%, transparent), transparent 70%),
-    var(--bg);
+  --page-bg: var(--bg);
   color-scheme: dark;
+
+  /* Home tiles: each section's own colour (used only on the home page). */
+  --home-library: #dcb765;
+  --home-games: #ff6fb0;
+  --home-certificates: #93aac4;
+  --home-achievements: #e6697f;
+  --home-habits: #86b894;
+  --home-balance: #5db4ff;
+}
+@media (prefers-color-scheme: light) {
+  :root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) {
+    --accent: var(--accent-light, #2f6fe4);
+    --bg: #f1f2f5;
+    --surface: #ffffff;
+    --surface-hi: #e6e7ec;
+    --copper: #6b6d76;
+    --ink: #121317;
+    --ink-dim: #5d606b;
+    --home-library: #a5791f;
+    --home-games: #c2306f;
+    --home-certificates: #4f6d92;
+    --home-achievements: #b23a52;
+    --home-habits: #3f7a52;
+    --home-balance: #1f6fc4;
+    color-scheme: light;
+  }
+}
+/* The other themes keep their own fonts and card shape. */
+:root:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"]) {
+  --card-radius: 0.75rem;
+  --hex-line: #dcb765;
+  --font-book: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --title-weight: 400;
+  --title-spacing: -0.01em;
 }
 
 /* Retro-future (games): neon sunset over a night grid. Bahnschrift is built into Windows. */
@@ -58,24 +93,6 @@
     radial-gradient(55rem 26rem at 50% -6rem, color-mix(in srgb, var(--copper) 22%, transparent), transparent 70%),
     radial-gradient(40rem 24rem at 0% 100%, color-mix(in srgb, var(--glow) 9%, transparent), transparent 70%),
     var(--bg);
-}
-
-/* Minimalist (habits): light paper, near-black ink, one quiet sage accent. */
-:root:has(main[data-theme="minimal"]) {
-  --bg: #f6f4ef;
-  --surface: #ffffff;
-  --surface-hi: #ece9e1;
-  --brass: #46705a;
-  --copper: #8d887d;
-  --glow: #2d5f8b;
-  --ink: #1d1c1a;
-  --ink-dim: #625e56;
-
-  --font-book: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --title-weight: 300;
-  --title-spacing: -0.02em;
-  --page-bg: var(--bg);
-  color-scheme: light;
 }
 
 /* Gallery (certificates, achievements): ink-blue museum wall, ivory text, a soft spotlight. */
@@ -108,30 +125,6 @@
   --page-bg:
     radial-gradient(44rem 26rem at 50% -8rem, color-mix(in srgb, var(--brass) 20%, transparent), transparent 70%),
     radial-gradient(40rem 30rem at 0% 100%, color-mix(in srgb, var(--copper) 12%, transparent), transparent 70%),
-    var(--bg);
-}
-
-/* Home: a calm charcoal base. The page itself stays neutral; every section tile glows only in
-   its own accent colour. The --home-* colours are used only on this page. */
-:root:has(main[data-theme="home"]) {
-  --bg: #121316;
-  --surface: #1a1c20;
-  --surface-hi: #24272c;
-  --brass: #e4b565;
-  --copper: #9aa0ad;
-  --glow: #7fe7dc;
-  --ink: #eeece7;
-  --ink-dim: #a4a7af;
-
-  --home-library: #dcb765;
-  --home-games: #ff6fb0;
-  --home-certificates: #93aac4;
-  --home-achievements: #e6697f;
-  --home-habits: #86b894;
-  --home-balance: #5db4ff;
-
-  --page-bg:
-    radial-gradient(50rem 22rem at 50% -8rem, color-mix(in srgb, var(--ink) 6%, transparent), transparent 70%),
     var(--bg);
 }
 
@@ -252,7 +245,7 @@ body {
 .card {
   position: relative;
   border: 1px solid color-mix(in srgb, var(--ink-dim) 16%, transparent);
-  border-radius: 0.75rem;
+  border-radius: var(--card-radius);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--ink) 4%, transparent), transparent 60%),
     var(--surface);
@@ -592,31 +585,6 @@ body {
   background: linear-gradient(90deg, var(--copper), color-mix(in srgb, var(--glow) 60%, transparent) 40%, transparent);
 }
 
-/* Minimalist: flat, quiet, no glows or ornaments. */
-:root:has(main[data-theme="minimal"]) .card {
-  background: var(--surface);
-  box-shadow: none;
-  border-color: color-mix(in srgb, var(--ink) 12%, transparent);
-}
-:root:has(main[data-theme="minimal"]) .ornament::after {
-  background: color-mix(in srgb, var(--ink) 14%, transparent);
-}
-:root:has(main[data-theme="minimal"]) .badge-live::before {
-  box-shadow: none;
-}
-:root:has(main[data-theme="minimal"]) .habit-cell {
-  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
-}
-:root:has(main[data-theme="minimal"]) .habit-unrecorded {
-  border-color: color-mix(in srgb, var(--ink) 14%, transparent);
-}
-:root:has(main[data-theme="minimal"]) .habit-done {
-  border-color: transparent;
-}
-:root:has(main[data-theme="minimal"]) .site-header {
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-}
-
 /* Gallery: every card gets a thin gilt inner frame, like a picture on a museum wall. */
 :root:has(main[data-theme="gallery"]) .card::after {
   content: "";
@@ -627,65 +595,23 @@ body {
   pointer-events: none;
 }
 
-/* Brass: thin gold linework, a faint hexagon lattice and a teal glow on interaction.
-   "Default theme" = any page without a data-theme (Library, books, 404). */
-:root:not(:has(main[data-theme])) body::before {
-  content: "";
-  position: fixed;
-  will-change: transform;
-  inset: 0 0 auto 0;
-  height: 70vh;
-  z-index: -1;
-  pointer-events: none;
-  background: var(--hex-line);
-  opacity: 0.07;
-  /* A hexagon outline tile (local data URI, no network), faded out towards the bottom. */
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='black'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='black'/%3E%3C/svg%3E"), linear-gradient(to bottom, black, transparent);
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='black'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='black'/%3E%3C/svg%3E"), linear-gradient(to bottom, black, transparent);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
+/* Oxygen: flat rounded cards with no outline in light mode, a soft one in dark; the active chip is filled. */
+:root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) .card {
+  background: var(--surface);
+  box-shadow: none;
 }
-/* A small gold hexagon before every eyebrow label. */
-:root:not(:has(main[data-theme])) .eyebrow::before {
-  content: "";
-  display: inline-block;
-  width: 0.6em;
-  height: 0.7em;
-  margin-right: 0.7em;
-  background: var(--hex-line);
-  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+:root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) .ornament::after {
+  background: color-mix(in srgb, var(--ink) 12%, transparent);
 }
-/* Cards get two thin gold corner brackets, like an engraved plate. */
-:root:not(:has(main[data-theme])) .card::after {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  pointer-events: none;
-  opacity: 0.6;
-  background:
-    linear-gradient(var(--hex-line), var(--hex-line)) top left / 14px 1px no-repeat,
-    linear-gradient(var(--hex-line), var(--hex-line)) top left / 1px 14px no-repeat,
-    linear-gradient(var(--hex-line), var(--hex-line)) bottom right / 14px 1px no-repeat,
-    linear-gradient(var(--hex-line), var(--hex-line)) bottom right / 1px 14px no-repeat;
+:root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) .chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
 }
-:root:not(:has(main[data-theme])) .card {
-  border-color: color-mix(in srgb, var(--hex-line) 18%, transparent);
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-}
-:root:not(:has(main[data-theme])) .card:hover {
-  border-color: color-mix(in srgb, var(--glow) 45%, transparent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow) 14%, transparent), 0 18px 40px -26px color-mix(in srgb, var(--glow) 45%, transparent);
-}
-:root:not(:has(main[data-theme])) .chip[aria-pressed="true"] {
-  border-color: var(--hex-line);
-  box-shadow: 0 0 14px -5px var(--glow);
-}
-:root:not(:has(main[data-theme])) .site-header {
-  border-bottom-color: color-mix(in srgb, var(--hex-line) 22%, transparent);
-}
-:root:not(:has(main[data-theme])) .nav-link[aria-current="page"]::after {
-  background: linear-gradient(90deg, var(--hex-line), var(--glow));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--glow) 60%, transparent);
+@media (prefers-color-scheme: light) {
+  :root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) .card {
+    border-color: transparent;
+  }
 }
 
 /* Trophy room: each card is a plaque with a gold top edge. */
@@ -1668,7 +1594,8 @@ input[type="checkbox"] {
 }
 .habit-marks {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr); /* as many equal buttons as the habit offers (2 to 4) */
   gap: 0.4rem;
 }
 .habit-marks .mark-btn {
@@ -1864,15 +1791,18 @@ input[type="checkbox"] {
   border-color: var(--ink-dim);
   background: color-mix(in srgb, var(--ink-dim) 14%, transparent);
 }
-/* Today: habits grouped under their anchor. */
+/* Today: habits grouped by anchor. */
 .habit-group + .habit-group {
   margin-top: 0.9rem;
 }
 .habit-group-title {
   display: flex;
-  justify-content: space-between;
+  width: 100%;
+  gap: 0.5rem;
   align-items: baseline;
-  padding: 0.35rem 0;
+  padding: 0.45rem 0;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
   font-size: 0.7rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -1970,7 +1900,7 @@ input[type="checkbox"] {
   padding: 1.1rem 1.25rem;
 }
 
-/* Life areas: the monthly challenge (progress bar in the theme's glow, never red). */
+/* Balance: the monthly boss (health bar in the theme's glow, never red). */
 .challenge-card {
   display: flex;
   flex-direction: column;
@@ -2131,7 +2061,7 @@ input[type="checkbox"] {
   border-color: color-mix(in srgb, var(--brass) 40%, transparent);
 }
 
-/* Core habits card: this week as seven small squares (done brass, half lighter, empty outline; never red). */
+/* Keystones card: this week as seven small squares (done brass, half lighter, empty outline; never red). */
 .core-week {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
@@ -2163,11 +2093,461 @@ input[type="checkbox"] {
   opacity: 0.4;
 }
 
-/* Today: "is the second calendar's date right?" around the end of a sighted-moon month. */
+/* Today: "is the second calendar's date right?" around the end of its month. */
 .date-ask {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   flex-basis: 100%;
+}
+
+/* ---------- Oxygen glass and motion ----------
+   The page glows softly in the wallpaper's colours (--accent and --accent-2, from the phone's Material You
+   palette or Settings) and cards, header and tab bar are frosted glass over it. Presses spring a little;
+   all motion stops for "reduce motion". Only the everyday pages (the other themes keep their own look). */
+:root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) {
+  --accent-2: var(--accent2-dark, color-mix(in oklab, var(--accent) 55%, #ff8ac2));
+  --glass: color-mix(in srgb, var(--surface) 58%, transparent);
+  --glass-line: color-mix(in srgb, var(--ink) 9%, transparent);
+  --spring: cubic-bezier(0.22, 1.2, 0.36, 1);
+  --page-bg:
+    radial-gradient(55rem 38rem at 0% -10%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%),
+    radial-gradient(48rem 40rem at 100% 35%, color-mix(in srgb, var(--accent-2) 20%, transparent), transparent 60%),
+    radial-gradient(50rem 30rem at 30% 110%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+    var(--bg);
+
+  & .card {
+    background: var(--glass);
+    border-color: var(--glass-line);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 7%, transparent), 0 12px 32px -20px rgb(0 0 0 / 0.6);
+  }
+  & .site-header,
+  & .tab-bar,
+  & .tab-sheet {
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    -webkit-backdrop-filter: blur(22px) saturate(1.6);
+    backdrop-filter: blur(22px) saturate(1.6);
+    border-color: var(--glass-line);
+  }
+  & .chip {
+    background: color-mix(in srgb, var(--surface) 45%, transparent);
+    border-color: var(--glass-line);
+  }
+  /* The active tab sits on a soft accent pill. */
+  & .tab[aria-current="page"] svg {
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    border-radius: 999px;
+    padding: 0.15rem 0.9rem;
+    box-sizing: content-box;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) {
+    --accent-2: var(--accent2-light, color-mix(in oklab, var(--accent) 55%, #d6337a));
+    --glass: color-mix(in srgb, var(--surface) 70%, transparent);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"], main[data-theme="dashboard"])) {
+    & .chip,
+    & button,
+    & a.card,
+    & .tab {
+      transition: transform 0.38s var(--spring), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.3s ease;
+    }
+    & .chip:active,
+    & button:active,
+    & a.card:active {
+      transform: scale(0.96);
+      transition-duration: 0.1s;
+    }
+    & .tab:active {
+      transform: scale(0.9);
+    }
+    & .tab[aria-current="page"] svg {
+      animation: tab-pill 0.45s var(--spring);
+    }
+    @media (hover: hover) {
+      & a.card:hover {
+        transform: translateY(-3px);
+        box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink) 9%, transparent), 0 22px 40px -22px color-mix(in srgb, var(--accent) 45%, transparent);
+      }
+    }
+  }
+}
+@keyframes tab-pill {
+  from {
+    background: transparent;
+    transform: scale(0.7);
+  }
+}
+
+/* Today: folding habit groups, counted habits, "not applicable", and today's ring. */
+.habit-chevron {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 0.6;
+  transition: transform 0.3s var(--spring, ease);
+}
+.habit-group-title[aria-expanded="true"] .habit-chevron {
+  transform: rotate(90deg);
+}
+.habit-group-list {
+  animation: feel-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.habit-amount {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.habit-amount .mark-btn {
+  width: 2.6rem;
+  height: 2.6rem;
+}
+.habit-amount-input {
+  width: 3.6rem;
+  text-align: center;
+}
+.habit-row-na {
+  opacity: 0.6;
+}
+.today-ring {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+.today-ring-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 14%, transparent);
+  stroke-width: 3;
+}
+.today-ring-fill {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s var(--spring, ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  .habit-chevron,
+  .today-ring-fill {
+    transition: none;
+  }
+  .habit-group-list {
+    animation: none;
+  }
+}
+.fold-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  width: 100%;
+  min-width: 0;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.fold-head .habit-chevron {
+  color: var(--brass);
+}
+.fold-head[aria-expanded="true"] .habit-chevron {
+  transform: rotate(90deg);
+}
+.fold-body {
+  animation: feel-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fold-body {
+    animation: none;
+  }
+}
+
+/* Balance: the last 12 months as bars (ProgressCard). */
+.progress-bars {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: end;
+  gap: 0.35rem;
+  height: 8rem;
+}
+.progress-bars li {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.3rem;
+  height: 100%;
+}
+.progress-bar {
+  width: 100%;
+  border-radius: 0.4rem 0.4rem 0.15rem 0.15rem;
+  background: color-mix(in srgb, var(--brass) 38%, transparent);
+  transition: height 0.6s ease;
+}
+.progress-bars li.is-now .progress-bar {
+  background: var(--brass);
+}
+.progress-bars li.is-best .progress-bar {
+  box-shadow: 0 0 14px -3px var(--glow);
+}
+.progress-month {
+  font-size: 0.65rem;
+  color: var(--ink-dim);
+}
+/* Rows with one or two marks (yes/no, each anchor's part) or an amount sit on one line, also on phones. */
+.habit-row-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.habit-row-compact .habit-marks .mark-btn {
+  width: 3rem;
+  height: 2.6rem;
+}
+
+/* Today: the calm summary at the top (ring, next anchor, tasks left). */
+.today-summary {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  padding: 1rem 1.25rem;
+}
+.today-summary svg {
+  flex: none;
+}
+.today-summary-pct {
+  font-size: 15px;
+  font-weight: 650;
+  fill: var(--ink);
+}
+
+/* Habits page: one row per habit (last 14 days as dots, 7- and 30-day share). */
+.habit-overview {
+  padding: 1rem 1.25rem;
+}
+.habit-overview-head,
+.habit-overview-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto 3rem 7.5rem;
+  align-items: center;
+  gap: 0.9rem;
+}
+.habit-overview-head {
+  padding-bottom: 0.5rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.habit-overview-row {
+  padding: 0.6rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--ink-dim) 12%, transparent);
+}
+.habit-dots {
+  display: grid;
+  grid-template-columns: repeat(14, 0.7rem);
+  gap: 0.2rem;
+}
+.habit-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.2rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 22%, transparent);
+}
+.habit-overview-bar {
+  min-width: 3rem;
+  flex: none;
+  width: 3.5rem;
+}
+@media (max-width: 639px) {
+  .habit-overview-head,
+  .habit-overview-row {
+    grid-template-columns: minmax(0, 1fr) 2.6rem 2.6rem;
+  }
+  .habit-overview-head span:nth-child(2),
+  .habit-dots,
+  .habit-overview-bar {
+    display: none;
+  }
+}
+
+/* ============================================================
+   Oxygen design system (everyday pages; the 3D collection rooms keep their own themes).
+   One calm visual language (research: calm technology, consistent hierarchy lowers stress):
+   - type: one big bold page title, section labels in small sentence-case, body 15-16 px
+   - buttons: filled accent = the main action, tonal = secondary, chips = choosing between options
+   - controls: filled rounded fields, switch-style toggles, dark native pickers
+   - home tiles: the same glass card for every section, its colour only as a dot and arrow
+   ============================================================ */
+:root:not(:has(main[data-theme="arcade"], main[data-theme="gallery"], main[data-theme="trophy"])) {
+  /* Page header: the title leads; the old spaced-out label above it goes. */
+  & .page-eyebrow {
+    display: none;
+  }
+  & .page-title {
+    font-size: clamp(2.1rem, 7vw, 3rem);
+    letter-spacing: -0.03em;
+  }
+  /* Section labels: sentence case, no wide letter-spacing. */
+  & .eyebrow,
+  & .status-h {
+    font-family: var(--font-label);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--ink-dim);
+  }
+  & .ornament {
+    font-family: var(--font-label);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-transform: none;
+  }
+  & .card h2.font-serif,
+  & .card h3.font-serif {
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+
+  /* Buttons */
+  & .chip {
+    min-height: 2.25rem;
+    padding-inline: 0.95rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+  & .edit-primary,
+  & .chip.edit-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+    font-weight: 600;
+  }
+  & .edit-primary:disabled {
+    opacity: 0.45;
+  }
+
+  /* Fields: filled, rounded, no hard outline; the accent shows on focus. */
+  & .today-input,
+  & .edit-field input,
+  & .edit-field select,
+  & .edit-field textarea {
+    border: 1px solid transparent;
+    border-radius: 0.85rem;
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+    padding: 0.65rem 0.85rem;
+    font-size: 0.95rem;
+    color: var(--ink);
+    transition: border-color 0.2s ease, background-color 0.2s ease;
+  }
+  & .today-input:focus,
+  & .edit-field input:focus,
+  & .edit-field select:focus,
+  & .edit-field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  & select,
+  & input[type="date"],
+  & input[type="time"],
+  & input[type="color"] {
+    color-scheme: dark;
+    accent-color: var(--accent);
+  }
+  & .edit-field > span {
+    font-size: 0.8rem;
+    color: var(--ink-dim);
+  }
+
+  /* Checkboxes become switches, like OxygenOS settings. */
+  & input[type="checkbox"] {
+    appearance: none;
+    flex: none;
+    position: relative;
+    width: 2.6rem;
+    height: 1.5rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--ink) 18%, transparent);
+    cursor: pointer;
+    transition: background-color 0.25s ease;
+  }
+  & input[type="checkbox"]::after {
+    content: "";
+    position: absolute;
+    top: 0.2rem;
+    left: 0.2rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 999px;
+    background: var(--ink);
+    transition: transform 0.3s var(--spring, ease);
+  }
+  & input[type="checkbox"]:checked {
+    background: var(--accent);
+  }
+  & input[type="checkbox"]:checked::after {
+    transform: translateX(1.1rem);
+    background: var(--bg);
+  }
+  & input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Home tiles: one glass card for every section; its colour is a dot and the arrow. */
+  & .section-tile {
+    min-height: 8.5rem;
+    border: 1px solid var(--glass-line);
+    border-radius: var(--card-radius);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+  }
+  & .section-tile::after {
+    display: none;
+  }
+  & .section-tile-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    font-family: var(--font-label);
+  }
+  & .section-tile-eyebrow::before {
+    content: "";
+    width: 0.55rem;
+    height: 0.55rem;
+    margin: 0;
+    border-radius: 999px;
+    background: var(--tile-accent);
+    clip-path: none;
+  }
+  & .section-tile-title {
+    font-family: var(--font-book);
+    font-size: 1.6rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    text-transform: none;
+    text-shadow: none;
+  }
+
+  /* Balance's status window loses its old corner brackets and blue frame. */
+  & .system-window::before,
+  & .system-window::after {
+    display: none;
+  }
+}
+/* The footer repeats what the tab bar offers: shown on the PC only. */
+@media (max-width: 639px) {
+  .site-footer {
+    display: none;
+  }
 }

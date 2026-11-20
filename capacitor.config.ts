@@ -13,10 +13,11 @@ const config: CapacitorConfig = {
     cleartext: true,
   },
   plugins: {
-    // Light status-bar icons on the dark page; the page pads itself with the --safe-area-inset-* values.
+    // Light status-bar icons on the dark page (the owner uses dark mode); the page pads itself with the
+    // --safe-area-inset-* values.
     SystemBars: { style: "DARK", insetsHandling: "css" },
-    // The LifeOS mark as the small notification icon, tinted brass.
-    LocalNotifications: { smallIcon: "ic_stat_lifeos", iconColor: "#e4b565" },
+    // The LifeOS ring and check as the small notification icon, tinted the icon's sage green.
+    LocalNotifications: { smallIcon: "ic_stat_lifeos", iconColor: "#7fbf9e" },
   },
 };
 

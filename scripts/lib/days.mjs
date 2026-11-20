@@ -57,6 +57,7 @@ export function dueOn(habit, date) {
 }
 
 const DIFFICULTY = ["easy", "medium", "hard"];
+const MARK_ORDER = ["done", "half", "partial", "missed"];
 // Replaces the habit list. Ids are kept permanent: an id that exists keeps its history; new ids are added.
 export function writeHabits(list) {
   if (!Array.isArray(list)) throw new Error("habits: must be a list");
@@ -73,6 +74,27 @@ export function writeHabits(list) {
     if (h.time && /^\d{2}:\d{2}$/.test(h.time)) out.time = h.time;
     if (DIFFICULTY.includes(h.difficulty)) out.difficulty = h.difficulty;
     if (h.target) out.target = String(h.target).trim();
+    // Which marks the habit offers (default: done, half, showed up, not done; "not applicable" is always there).
+    if (Array.isArray(h.marks)) {
+      const marks = MARK_ORDER.filter((m) => h.marks.includes(m));
+      if (marks.length && marks.length < MARK_ORDER.length) out.marks = marks;
+    }
+    // Counted: an amount a day (e.g. pages), with an optional daily goal.
+    if (h.unit) {
+      out.unit = String(h.unit).trim().slice(0, 12);
+      const goal = Number(h.goal);
+      if (Number.isInteger(goal) && goal > 0 && goal <= 1000) out.goal = goal;
+    }
+    // Parts, each at an anchor of your day (e.g. one per meal); the habit's mark follows them.
+    if (Array.isArray(h.parts) && h.parts.length) {
+      out.parts = h.parts.slice(0, 12).map((p, j) => {
+        const pid = slugify(String(p.id || p.label || ""));
+        if (!pid) throw new Error(`habit "${id}": part ${j + 1} needs a name`);
+        return { id: pid, label: String(p.label || pid).trim(), ...(typeof p.anchor === "string" && /^[a-z0-9-]{1,60}$/.test(p.anchor) ? { anchor: p.anchor } : {}) };
+      });
+      const pm = Array.isArray(h.partMarks) ? ["done", "half", "missed"].filter((m) => h.partMarks.includes(m)) : [];
+      if (pm.length) out.partMarks = pm;
+    }
     // A core habit counts double XP and has a weekly target (days out of 7) instead of a streak.
     if (h.core === true) {
       out.core = true;
@@ -147,13 +169,43 @@ function setTasks(note, tasks) {
   note.content = setSection(note.content, "Tasks", tasks.map((t) => taskLines(t, today())).join("\n"));
 }
 
-function habitStates(note) {
+// "## Habits": one line per habit; a habit with parts has them on indented lines under it:
+//   - [/] meals
+//     - [x] breakfast
+//     - [/] lunch
+function habitLines(note) {
   const states = {};
+  const parts = {};
+  let parent = null;
   for (const line of getSection(note.content, "Habits").split(/\r?\n/)) {
-    const m = /^\s*[-*+]\s*\[( |x|X|\/|o|O|-)\]\s+(\S+)\s*$/.exec(line);
-    if (m) states[m[2].toLowerCase()] = MARK_TO_STATE[m[1]];
+    const m = /^(\s*)[-*+]\s*\[( |x|X|\/|o|O|-)\]\s+(\S+)\s*$/.exec(line);
+    if (!m) continue;
+    const id = m[3].toLowerCase();
+    if (!m[1]) {
+      states[id] = MARK_TO_STATE[m[2]];
+      parent = id;
+    } else if (parent) (parts[parent] ??= {})[id] = MARK_TO_STATE[m[2]];
   }
-  return states;
+  return { states, parts };
+}
+const habitStates = (note) => habitLines(note).states;
+
+// ---------- habit kinds: marks allowed, an amount (pages), or parts (one per anchor) ----------
+const PART_VALUE = { done: 1, half: 0.5, partial: 0.25, missed: 0 };
+// The habit's own mark from its parts: all done -> done, half or more -> half, any -> showed up, none -> not done.
+// Parts not marked yet count as not done (so 3 of 5 parts is "half", not "done").
+export function markFromParts(partStates, defs) {
+  const counted = defs.filter((d) => partStates[d.id] !== "na");
+  if (!counted.some((d) => partStates[d.id])) return null;
+  const avg = counted.reduce((s, d) => s + (PART_VALUE[partStates[d.id]] ?? 0), 0) / counted.length;
+  return avg >= 1 ? "done" : avg >= 0.5 ? "half" : avg > 0 ? "partial" : "missed";
+}
+// The habit's own mark from an amount: the goal reached -> done, half of it -> half, some -> showed up.
+// Without a goal, any amount is done.
+export function markFromAmount(amount, goal) {
+  if (amount === null || amount === undefined) return null;
+  if (!goal) return amount > 0 ? "done" : "missed";
+  return amount >= goal ? "done" : amount >= goal / 2 ? "half" : amount > 0 ? "partial" : "missed";
 }
 
 // The journal is the "## Journal" section without the keep line, which is kept separately.
@@ -178,10 +230,11 @@ const hhmm = (v) => {
 export function getDay(date) {
   checkDate(date);
   const note = readDay(date);
-  const states = habitStates(note);
+  const { states, parts } = habitLines(note);
+  const amounts = note.data.amounts && typeof note.data.amounts === "object" ? note.data.amounts : {};
   const habits = readHabits()
     .filter((h) => h.active !== false || states[h.id])
-    .map((h) => ({ ...h, due: dueOn(h, date), state: states[h.id] ?? null }));
+    .map((h) => ({ ...h, due: dueOn(h, date), state: states[h.id] ?? null, partStates: parts[h.id] ?? {}, amount: num(amounts[h.id]) }));
   const { journal, keep } = journalOf(note);
   const now = stamp();
   const lockAt = lockTime(date, note.data);
@@ -198,6 +251,8 @@ export function getDay(date) {
     // Measured screen time: the PC's (live until the day closes, then saved in the note) and the phone's.
     pcHours: num(note.data.screen_pc_hours) ?? pcHours(date),
     phoneHours: num(note.data.screen_phone_hours),
+    // Bored time: the longest stretch the phone stayed off between 08:00 and 22:00 (measured by the phone).
+    boredMin: num(note.data.bored_min),
     // Books being read, so pages read today can move the right book forward.
     reading: readingBooks(),
     pagesBook: typeof note.data.pages_book === "string" ? note.data.pages_book : null,
@@ -288,7 +343,7 @@ function carriedTasks(date) {
 // Applies changes to a day: { habits: {id: state|null}, missed: {id: reason|null}, mood, sleep, productivity,
 // screenTime, pages, journal, keep, fun: [..], finish: true } plus `at` (when it was done on the device) and
 // `unlock` (the owner unlocked a finished day to change it).
-const RECORD_KEYS = ["habits", "missed", "mood", "sleep", "productivity", "screenTime", "pages", "journal", "keep", "fun", "finish"];
+const RECORD_KEYS = ["habits", "parts", "amounts", "missed", "mood", "sleep", "productivity", "screenTime", "pages", "journal", "keep", "fun", "finish"];
 export function updateDay(date, changes) {
   const note = readDay(date);
   const at = changeTime(changes.at);
@@ -299,12 +354,47 @@ export function updateDay(date, changes) {
     if (!logged[key]) logged[key] = at;
   };
   const pagesBefore = num(note.data.pages_read) ?? 0; // read before the numbers below are updated
-  if (changes.habits) for (const [id, state] of Object.entries(changes.habits)) if (state) mark(id);
-  if (changes.habits) {
-    const states = { ...habitStates(note), ...changes.habits };
-    const order = readHabits().map((h) => h.id);
+  if (changes.habits || changes.parts || changes.amounts) {
+    // Ids end up as lines in the note: only plain habit ids (no line breaks or other text can sneak in).
+    for (const group of [changes.habits, changes.parts, changes.amounts])
+      for (const id of Object.keys(group ?? {})) if (!/^[a-z0-9][a-z0-9-]{0,59}$/.test(id)) throw new Error(`habits: bad id "${id.slice(0, 20)}"`);
+    const defs = readHabits();
+    const byId = new Map(defs.map((h) => [h.id, h]));
+    const { states, parts } = habitLines(note);
+    Object.assign(states, changes.habits ?? {});
+    // Parts { habitId: { partId: state|null } }: the habit's own mark follows them.
+    for (const [id, changed] of Object.entries(changes.parts ?? {})) {
+      const partDefs = byId.get(id)?.parts;
+      if (!Array.isArray(partDefs) || !changed || typeof changed !== "object") throw new Error(`parts: "${id}" has no parts`);
+      const next = { ...(parts[id] ?? {}) };
+      for (const [part, state] of Object.entries(changed)) {
+        if (!partDefs.some((d) => d.id === part)) throw new Error(`parts: "${id}" has no part "${part}"`);
+        if (state !== null && STATE_TO_MARK[state] === undefined) throw new Error(`parts: unknown mark "${state}"`);
+        if (state) next[part] = state;
+        else delete next[part];
+      }
+      parts[id] = next;
+      states[id] = markFromParts(next, partDefs);
+    }
+    // Amounts { habitId: number|null } (e.g. pages of a book): kept in the frontmatter; the mark follows.
+    const amounts = note.data.amounts && typeof note.data.amounts === "object" ? { ...note.data.amounts } : {};
+    for (const [id, value] of Object.entries(changes.amounts ?? {})) {
+      const v = num(value);
+      if (v !== null && (!Number.isFinite(v) || v < 0 || v > 1000)) throw new Error("amounts: a number from 0 to 1000");
+      if (v === null) delete amounts[id];
+      else amounts[id] = v;
+      states[id] = markFromAmount(v, num(byId.get(id)?.goal));
+    }
+    note.data.amounts = Object.keys(amounts).length ? amounts : undefined;
+    for (const id of [...Object.keys(changes.habits ?? {}), ...Object.keys(changes.parts ?? {}), ...Object.keys(changes.amounts ?? {})]) if (states[id]) mark(id);
+    const order = defs.map((h) => h.id);
     const ids = [...order.filter((id) => id in states), ...Object.keys(states).filter((id) => !order.includes(id))];
-    const lines = ids.filter((id) => states[id] && STATE_TO_MARK[states[id]] !== undefined).map((id) => `- [${STATE_TO_MARK[states[id]]}] ${id}`);
+    const lines = [];
+    for (const id of ids) {
+      if (!states[id] || STATE_TO_MARK[states[id]] === undefined) continue;
+      lines.push(`- [${STATE_TO_MARK[states[id]]}] ${id}`);
+      for (const d of byId.get(id)?.parts ?? []) if (parts[id]?.[d.id]) lines.push(`  - [${STATE_TO_MARK[parts[id][d.id]]}] ${d.id}`);
+    }
     note.content = setSection(note.content, "Habits", lines.join("\n"));
   }
   for (const [key, field, max] of [["productivity", "productivity", 100], ["screenTime", "screen_time_hours", 24], ["pages", "pages_read", 5000], ["sleep", "sleep_hours", 24], ["mood", "mood", 5]]) {
@@ -338,6 +428,10 @@ export function updateDay(date, changes) {
   if ("phoneHours" in changes) {
     const v = num(changes.phoneHours);
     if (v !== null && Number.isFinite(v) && v >= 0 && v <= 24) note.data.screen_phone_hours = Math.round(v * 10) / 10;
+  }
+  if ("boredMin" in changes) {
+    const v = num(changes.boredMin);
+    if (v !== null && Number.isInteger(v) && v >= 0 && v <= 840) note.data.bored_min = v;
   }
   // Bed and wake times (measured by the phone, or corrected by hand) and reward time used: allowed on
   // closed days too, like phoneHours (they are measurements and a spending log, not the day's record).

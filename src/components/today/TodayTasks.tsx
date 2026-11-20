@@ -13,7 +13,7 @@ import { editInPlan, feelEdit, leavesList } from "@/components/plan/planEdits";
 import { localToday, type Task } from "./types";
 
 // Today's tasks card: Overdue · Today · This week · This month, to tick off. New tasks are planned on the
-// Plan page. Today's own tasks come from the day (so ticks give XP there); the rest from the plan kept on
+// Plan page. Today's own tasks come from the day (so ticks count for the day); the rest from the plan kept on
 // this device (refreshed from the PC, which also keeps reminders for planned tasks up to date).
 export function TodayTasks({ date, dayTasks, onDayEdit, place }: { date: string; dayTasks: Task[]; onDayEdit: OnEdit; place?: DaySetup }) {
   const app = useIsApp();

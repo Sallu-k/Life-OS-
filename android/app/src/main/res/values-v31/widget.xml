@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: the widgets and the Gate take the wallpaper's colours (Material You), like the rest of
+     the phone (OxygenOS / ColorOS). Older Android uses res/values/widget.xml. -->
+<resources>
+    <color name="widget_bg">@android:color/system_neutral1_900</color>
+    <color name="gate_bg">@android:color/system_neutral1_900</color>
+    <color name="widget_ink">@android:color/system_neutral1_50</color>
+    <color name="widget_dim">@android:color/system_neutral2_200</color>
+    <color name="widget_brass">@android:color/system_accent1_200</color>
+</resources>

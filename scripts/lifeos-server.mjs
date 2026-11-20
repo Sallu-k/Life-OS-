@@ -16,6 +16,7 @@ import { addTask, capture, editTask, getDay, readHabits, recordSleep, tasksIn, u
 import { getPlan, readGoals, saveGoals } from "./lib/plan.mjs";
 import { addMoney, getMoney, removeMoney } from "./lib/money.mjs";
 import { getRewards } from "./lib/rewards.mjs";
+import { gateBetween, gateInfo, logGate } from "./lib/gate.mjs";
 import { createItem, getItem, listItems, saveImage, trashItem, updateItem } from "./lib/notes.mjs";
 import { readSettings, writeSettings } from "./lib/settings.mjs";
 import { getReview, saveReview, weekOf } from "./lib/review.mjs";
@@ -24,6 +25,7 @@ import { startUsage } from "./lib/usage.mjs";
 import { closeFinishedDays } from "./lib/days.mjs";
 import { publish, siteRoot } from "./lib/site.mjs";
 import { siteManifest, zipFiles } from "./lib/appBundle.mjs";
+import { signManifest } from "./lib/updateKey.mjs";
 import { loadEnvLocal, vaultRoot } from "./lib/vault-write.mjs";
 
 loadEnvLocal();
@@ -203,7 +205,23 @@ function readBody(req, limit = 25 * 1024 * 1024) {
   });
 }
 
-const isLocal = (req) => LOOPBACK.test(plain(req.socket.remoteAddress));
+// "This PC" means more than a loopback address: any website open in a browser on this PC also connects
+// from 127.0.0.1. So a request only counts as this PC's own when it is addressed to 127.0.0.1/localhost
+// (not a look-alike name pointing here: DNS rebinding) and does not come from another web page (Origin and
+// Sec-Fetch-Site, which browsers always send for cross-site requests and pages cannot fake). LifeOS's own
+// pages, the PC Gate and scripts pass; anything else needs the token like the phone does.
+const SELF_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i;
+function isLocal(req) {
+  if (!LOOPBACK.test(plain(req.socket.remoteAddress))) return false;
+  if (!SELF_HOST.test(String(req.headers.host ?? ""))) return false;
+  const origin = req.headers.origin;
+  if (origin && !SELF_ORIGINS.has(String(origin).toLowerCase())) return false;
+  const site = req.headers["sec-fetch-site"];
+  return !site || site === "same-origin" || site === "none";
+}
+const SELF_ORIGINS = new Set(["127.0.0.1", "localhost", "[::1]"].map((h) => `http://${h}:${port}`));
+// The phone app's pages come from its own origin (Capacitor): only it may read API answers in a browser.
+const APP_ORIGINS = new Set(["http://localhost", "https://localhost", "capacitor://localhost"]);
 
 // The token check compares in constant time, and a device that sends a wrong token 10 times is
 // locked out for 15 minutes (guessing the 24-character token is hopeless anyway).
@@ -247,7 +265,8 @@ async function api(req, res, parts) {
     const ok = publish();
     return json(res, ok ? 200 : 409, ok ? { version: siteManifest(siteRoot(), { cacheIt: false }).version } : { error: "out/ is not a complete build" });
   }
-  if (name === "app" && slug === "manifest" && method === "GET") return json(res, 200, siteManifest(siteRoot(), { cacheIt: siteRoot().includes(".site") }));
+  // Signed, so the app can tell this PC's updates from anything else on the network.
+  if (name === "app" && slug === "manifest" && method === "GET") return json(res, 200, signManifest(siteManifest(siteRoot(), { cacheIt: siteRoot().includes(".site") })));
   if (name === "app" && slug === "files" && method === "POST") {
     const root = siteRoot();
     const { files } = siteManifest(root, { cacheIt: root.includes(".site") });
@@ -281,9 +300,9 @@ async function api(req, res, parts) {
   // ---------- Today: day, tasks, habits, capture ----------
   if (name === "day" && slug) {
     const date = slug === "today" ? localToday() : slug;
-    if (method === "GET") return json(res, 200, getDay(date));
+    if (method === "GET") return json(res, 200, withGate(getDay(date)));
     if (method === "PUT") {
-      const day = updateDay(date, await readBody(req));
+      const day = withGate(updateDay(date, await readBody(req)));
       scheduleQuietBuild();
       return json(res, 200, day);
     }
@@ -293,7 +312,7 @@ async function api(req, res, parts) {
     const date = body.date ?? localToday();
     addTask(date, body);
     scheduleQuietBuild();
-    return json(res, 201, /^\d{4}-\d{2}-\d{2}$/.test(date) ? getDay(date) : { tasks: tasksIn(date) });
+    return json(res, 201, /^\d{4}-\d{2}-\d{2}$/.test(date) ? withGate(getDay(date)) : { tasks: tasksIn(date) });
   }
   if (name === "task" && method === "PUT") {
     const body = await readBody(req);
@@ -330,6 +349,12 @@ async function api(req, res, parts) {
     const list = writeHabits((await readBody(req)).habits);
     scheduleBuild();
     return json(res, 200, list);
+  }
+  // ---------- the Gate: "why are you using this?" on every unlock (counts only, never note text) ----------
+  if (name === "gate" && method === "GET") return json(res, 200, gateInfo(localToday()));
+  if (name === "gate" && method === "POST") {
+    const body = await readBody(req, 256 * 1024);
+    return json(res, 201, { saved: logGate(body.events ?? body) });
   }
   if (name === "capture" && method === "POST") {
     const body = await readBody(req);
@@ -399,6 +424,9 @@ function findTask(date, body) {
   return Number(body.index);
 }
 
+// A day as Today shows it, plus that day's Gate counts ("12 unlocks, 3 for fun").
+const withGate = (day) => ({ ...day, gate: gateBetween(day.date, day.date) });
+
 // Today on this PC (not UTC), as YYYY-MM-DD.
 function localToday() {
   const d = new Date();
@@ -408,14 +436,21 @@ const imageField = (name) => COLLECTIONS[name]?.image.field ?? "image";
 
 const server = createServer(async (req, res) => {
   try {
-    const url = new URL(req.url || "/", "http://x");
-    // The phone app runs from its own origin, so the API allows cross-origin calls (every one still needs the token).
+    // Joined to a base as text: an address like "//" is a path here, not a host (it threw "Invalid URL").
+    const url = new URL(`http://x${(req.url || "/").startsWith("/") ? req.url : "/"}`);
+    // The phone app runs from its own origin, so the API allows cross-origin calls from it only (every one
+    // still needs the token). Other websites get no CORS headers, so a browser never lets them read answers.
     if (url.pathname.startsWith("/api/")) {
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      const origin = String(req.headers.origin ?? "");
+      if (APP_ORIGINS.has(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      }
       if (req.method === "OPTIONS") return res.writeHead(204).end();
     }
+    res.setHeader("X-Frame-Options", "DENY"); // no other page may show LifeOS inside a frame (clickjacking)
     if (url.pathname.startsWith("/api/")) {
       const parts = url.pathname.slice(5).split("/").filter(Boolean).map(decodeURIComponent);
       return await api(req, res, parts);

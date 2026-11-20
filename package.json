@@ -18,6 +18,8 @@
     "import-books": "node scripts/import-books.mjs",
     "start": "node scripts/lifeos-server.mjs",
     "app:android": "node scripts/build-app.mjs",
+    "app:install": "powershell -NoProfile -Command \"& \\\"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\\\" install -r LifeOS-app.apk\"",
+    "icons":"powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icons.ps1",
     "pc:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-pc-app.ps1",
     "pc:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pc-app.ps1",
     "pc:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pc-app.ps1 -Stop"

@@ -8,15 +8,18 @@ import { dayLabel } from "@/lib/format";
 import { loadDay, outbox, queue, savedDay, send } from "@/lib/offline";
 import { scheduleReminders } from "@/lib/phoneReminders";
 import { savedSetup } from "@/lib/anchors";
-import { lastNight, phoneScreenHours, takeWidgetTicks, updateWidget } from "@/lib/device";
+import { boredMinutes, gateOn, gateSync, lastNight, phoneScreenHours, takeWidgetTicks, updateWidget } from "@/lib/device";
 import type { GameSnapshot } from "@/lib/vault/gameData";
 import { DayState } from "./DayState";
 import { FunList } from "./FunList";
 import { MoodSleep } from "./MoodSleep";
 import { ReviewPrompt } from "./ReviewPrompt";
 import { HabitList } from "./HabitList";
+import { Fold } from "./Fold";
+import { markFromAmount, markFromParts } from "./habitKinds";
+import { TodaySummary } from "./TodaySummary";
 import { HabitManager } from "./HabitManager";
-import { liveXp, markSeen, reactFun, reactMark, reactSaved, reactTask, type FeelContext } from "./reactions";
+import { markSeen, reactFun, reactMark, reactSaved, reactTask, type FeelContext } from "./reactions";
 import { TodayTasks } from "./TodayTasks";
 import { Incentives } from "./Incentives";
 import { SecondDate } from "./SecondDate";
@@ -72,7 +75,8 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
   // Phone app: give the home-screen widget today's habits, bring in ticks made on the widget, and send
   // the phone's measured screen time when it has changed.
   async function phoneSync(today: Day) {
-    void updateWidget(today.date, today.habits);
+    await updateWidget(today.date, today.habits); // also gives the Gate the PC address and token
+    void gateOn().then(() => gateSync(today.date, Object.fromEntries(place.anchors.map((a) => [a.label, a.time])))); // also logs "off" once if the Gate was switched off
     const ticks = await takeWidgetTicks();
     for (const t of ticks) {
       const cached = t.date === today.date ? { ...today, habits: today.habits.map((h) => (h.id === t.id ? { ...h, state: t.state as Mark | null } : h)) } : today;
@@ -81,6 +85,8 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
     await syncSleep(today.date);
     const hours = await phoneScreenHours(today.date);
     if (hours !== null && Math.abs(hours - (today.phoneHours ?? -1)) >= 0.1) queue({ kind: "day", date: today.date, body: { phoneHours: hours } }, { ...today, phoneHours: hours });
+    const bored = await boredMinutes(today.date);
+    if (bored !== null && bored !== today.boredMin) queue({ kind: "day", date: today.date, body: { boredMin: bored } }, { ...today, boredMin: bored });
     if (ticks.length || (hours !== null && Math.abs(hours - (today.phoneHours ?? -1)) >= 0.1)) setTimeout(load, 500);
   }
   // Show what this device has for the day straight away; the PC's copy replaces it when it answers.
@@ -153,6 +159,26 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
     reactMark(day, updated, id, state, button, feelCtx.current);
     change({ kind: "day", date, body: { habits: { [id]: state } } }, updated);
   }
+  // One part of a habit (e.g. the breakfast part of "Meals"): the habit's own mark follows its parts.
+  function markPart(id: string, part: string, state: Mark | null, button: Element | null) {
+    if (!day || readOnly) return;
+    const habits = day.habits.map((h) => {
+      if (h.id !== id) return h;
+      const partStates = { ...(h.partStates ?? {}) };
+      if (state) partStates[part] = state;
+      else delete partStates[part];
+      return { ...h, partStates, state: markFromParts(partStates, h.parts ?? []) };
+    });
+    const updated = { ...day, habits };
+    reactMark(day, updated, id, habits.find((h) => h.id === id)?.state ?? null, button, feelCtx.current);
+    change({ kind: "day", date, body: { parts: { [id]: { [part]: state } } } }, updated);
+  }
+  // A counted habit's amount (e.g. pages of a book): the mark follows the amount and the goal.
+  function setAmount(id: string, amount: number | null) {
+    if (!day || readOnly) return;
+    const habits = day.habits.map((h) => (h.id === id ? { ...h, amount, state: markFromAmount(amount, h.goal) } : h));
+    change({ kind: "day", date, body: { amounts: { [id]: amount } } }, { ...day, habits });
+  }
   function editTask(t: Task, changes: Record<string, unknown>, row: Element | null = null) {
     if (!day) return;
     const gone = Boolean(changes.remove || changes.moveTo || (t.date !== date && changes.done));
@@ -186,7 +212,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
         <div className="today-meta">
           <span className="text-sm text-ink-dim">{dayLabel(date)}</span>
           <SecondDate date={date} setup={place} onSetup={setPlace} />
-          {day && game && <span className="badge text-brass">+{liveXp(day)} XP</span>}
+          
           <button type="button" className="chip ml-auto" onClick={() => setSetup(true)}>
             ⚙ Set up habits
           </button>
@@ -201,6 +227,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
         </p>
       ) : (
         <div className="flex flex-col gap-6">
+          {!day.future && <TodaySummary day={day} place={place} />}
           {isToday && <ReviewPrompt />}
           <DayState
             date={date}
@@ -217,7 +244,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
           {isToday && <Incentives day={day} game={game} onSave={(c) => change({ kind: "day", date, body: c }, { ...day, ...c })} />}
         <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
           <div className="flex flex-col gap-6">
-            {!day.future && <HabitList date={date} place={place} habits={day.habits} readOnly={readOnly} missed={day.missed} logged={day.logged} onMark={mark} onReason={reason} />}
+            {!day.future && <HabitList date={date} place={place} habits={day.habits} readOnly={readOnly} missed={day.missed} logged={day.logged} onMark={mark} onPart={markPart} onAmount={setAmount} onReason={reason} />}
             {!day.future && <MoodSleep day={day} readOnly={readOnly} onSave={save} />}
             {!day.future && <Numbers day={day} readOnly={readOnly} onSave={save} />}
             {!day.future && <FunList key={date} items={day.fun} readOnly={readOnly} onChange={saveFun} />}
@@ -261,7 +288,7 @@ function Numbers({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
   const reading = day.reading ?? [];
   const book = day.pagesBook ?? reading[0]?.slug ?? null;
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-label="The day in numbers">
+    <Fold id="numbers" title="Numbers" summary={[day.productivity !== null ? `${day.productivity}% productive` : null, day.screenTime !== null ? `${day.screenTime} h screen` : null, day.pages ? `${day.pages} pages` : null].filter(Boolean).join(" · ") || "Productivity, screen time, pages"}>
       <div className="grid grid-cols-3 gap-3">
         {field("productivity", "Productivity", "%")}
         {field("screenTime", "Screen", "hours", 0.25)}
@@ -286,7 +313,7 @@ function Numbers({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
           </select>
         </label>
       )}
-    </section>
+    </Fold>
   );
 }
 
@@ -296,7 +323,10 @@ function Numbers({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
 function MeasuredScreen({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSave(c: Partial<Day>): void }) {
   const pc = day.pcHours ?? null;
   const phone = day.phoneHours ?? null;
-  if (pc === null && phone === null) return null;
+  const gate = day.gate && day.gate.gates > 0 ? `Unlocks: ${day.gate.gates} (${day.gate.fun} for fun)` : null;
+  const bored = day.boredMin ? `longest phone-free stretch ${day.boredMin} min` : null;
+  const extra = [gate, bored].filter(Boolean).join(" · ");
+  if (pc === null && phone === null) return extra ? <p className="text-xs text-ink-dim">{extra}</p> : null;
   const total = Math.round(((pc ?? 0) + (phone ?? 0)) * 10) / 10;
   const parts = [pc !== null && `PC ${pc} h`, phone !== null && `phone ${phone} h`].filter(Boolean).join(" + ");
   return (
@@ -310,6 +340,7 @@ function MeasuredScreen({ day, readOnly, onSave }: { day: Day; readOnly: boolean
           Use {total} h
         </button>
       )}
+      {extra && <span>· {extra}</span>}
     </p>
   );
 }
@@ -325,13 +356,7 @@ function Journal({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
     reactSaved(e.currentTarget);
   };
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="journal-heading">
-      <div className="flex items-baseline justify-between">
-        <h2 id="journal-heading" className="font-serif text-xl text-ink">
-          Journal
-        </h2>
-        <span className="text-xs text-ink-dim">Private · never shown on the site</span>
-      </div>
+    <Fold id="journal" title="Journal" summary={journal.trim() ? "Written · private" : "Private · never shown on the site"}>
       <textarea className="today-input min-h-40" disabled={readOnly} value={journal} onChange={(e) => (setJournal(e.target.value), dirty())} placeholder="How did the day go?" />
       <label className="edit-field">
         <span>Keep line (shown on the Habits page)</span>
@@ -340,7 +365,7 @@ function Journal({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSav
       <button type="button" className="chip edit-primary w-fit" onClick={save} disabled={saved || readOnly}>
         {saved ? "Saved" : "Save journal"}
       </button>
-    </section>
+    </Fold>
   );
 }
 
@@ -358,10 +383,7 @@ function Capture() {
     }
   }
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="capture-heading">
-      <h2 id="capture-heading" className="font-serif text-xl text-ink">
-        Quick capture
-      </h2>
+    <Fold id="capture" title="Quick capture" summary="To Inbox or a Brainstorm idea">
       <textarea className="today-input min-h-20" value={text} onChange={(e) => setText(e.target.value)} placeholder="A thought, an idea, something to look up…" />
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" className="chip" onClick={() => send("inbox")}>
@@ -372,7 +394,7 @@ function Capture() {
         </button>
         <span className="text-xs text-ink-dim">{msg}</span>
       </div>
-    </section>
+    </Fold>
   );
 }
 

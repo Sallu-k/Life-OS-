@@ -3,6 +3,8 @@ package com.lifeos.app;
 import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
+import android.os.Build;
+import android.util.Base64;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -19,6 +21,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -78,6 +85,29 @@ public class LiveUpdatePlugin extends Plugin {
         }
     }
 
+    /** The update list was signed by this owner's PC: the public key comes from the APK itself (lifeos-pc.json,
+     *  never from an update), and Ed25519 needs Android 13+ (older phones get updates by APK only). */
+    private boolean signedByPc(String text, String sig) {
+        try {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false;
+            String key = new JSONObject(readAll(getContext().getAssets().open("public/lifeos-pc.json"))).optString("updateKey", "");
+            if (key.isEmpty()) return false;
+            PublicKey pub = KeyFactory.getInstance("Ed25519").generatePublic(new X509EncodedKeySpec(Base64.decode(key, Base64.DEFAULT)));
+            Signature s = Signature.getInstance("Ed25519");
+            s.initVerify(pub);
+            s.update(text.getBytes(StandardCharsets.UTF_8));
+            return s.verify(Base64.decode(sig, Base64.DEFAULT));
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static String hex(byte[] b) {
+        StringBuilder sb = new StringBuilder();
+        for (byte x : b) sb.append(String.format("%02x", x));
+        return sb.toString();
+    }
+
     private static HttpURLConnection open(String url, String token, int timeout) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(4000);
@@ -129,10 +159,19 @@ public class LiveUpdatePlugin extends Plugin {
         // 1. What the PC has.
         HttpURLConnection mc = open(url + "/api/app/manifest", token, 15000);
         if (mc.getResponseCode() != 200) throw new IOException("PC answered " + mc.getResponseCode());
-        String manifestText = readAll(mc.getInputStream());
+        // Signed by the PC (scripts/lib/updateKey.mjs): anything else on the network is refused.
+        JSONObject wrapped = new JSONObject(readAll(mc.getInputStream()));
+        String manifestText = wrapped.getString("signed");
+        if (!signedByPc(manifestText, wrapped.getString("sig"))) throw new IOException("Update refused: not signed by your PC");
         JSONObject next = new JSONObject(manifestText);
         JSONObject nextFiles = next.getJSONObject("files");
         String version = next.getString("version");
+        if (!version.matches("[0-9a-f]{6,64}")) throw new IOException("Update refused: bad version");
+        Iterator<String> names = nextFiles.keys();
+        while (names.hasNext()) {
+            String path = names.next();
+            if (!path.matches("[A-Za-z0-9._~@()+,\\-/\\[\\]]+") || path.contains("..") || path.startsWith("/")) throw new IOException("Update refused: bad file name");
+        }
 
         // 2. What the app shows now.
         File current = currentDir();
@@ -183,12 +222,20 @@ public class LiveUpdatePlugin extends Plugin {
                 ZipEntry e;
                 while ((e = zip.getNextEntry()) != null) {
                     File out = new File(tmp, e.getName());
-                    if (!out.getCanonicalPath().startsWith(root)) throw new IOException("Bad file name in update");
+                    if (!out.getCanonicalPath().startsWith(root) || !nextFiles.has(e.getName())) throw new IOException("Bad file name in update");
                     out.getParentFile().mkdirs();
+                    MessageDigest sha = MessageDigest.getInstance("SHA-256");
                     try (FileOutputStream fo = new FileOutputStream(out)) {
                         byte[] buf = new byte[64 * 1024];
                         int n;
-                        while ((n = zip.read(buf)) > 0) fo.write(buf, 0, n);
+                        while ((n = zip.read(buf)) > 0) {
+                            fo.write(buf, 0, n);
+                            sha.update(buf, 0, n);
+                        }
+                    }
+                    // Every file must be exactly the one the signed list names (its SHA-256 fingerprint).
+                    if (!hex(sha.digest()).startsWith(nextFiles.getString(e.getName())) || nextFiles.getString(e.getName()).length() < 32) {
+                        throw new IOException("Update refused: " + e.getName() + " does not match");
                     }
                     got.add(e.getName());
                 }
@@ -202,6 +249,7 @@ public class LiveUpdatePlugin extends Plugin {
             String path = keys.next();
             if (got.contains(path)) continue;
             File out = new File(tmp, path);
+            if (!out.getCanonicalPath().startsWith(tmp.getCanonicalPath() + File.separator)) throw new IOException("Bad file name in update");
             out.getParentFile().mkdirs();
             try (FileOutputStream fo = new FileOutputStream(out)) {
                 copy(openCurrent(current, path), fo);

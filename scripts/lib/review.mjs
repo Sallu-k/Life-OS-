@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import matter from "gray-matter";
 import { backup, getDay } from "./days.mjs";
 import { getSection, setSection } from "./notes.mjs";
+import { gateBetween } from "./gate.mjs";
 import { vaultRoot } from "./vault-write.mjs";
 
 const SCORE = { done: 1, half: 0.5, partial: 0.25, missed: 0 };
@@ -43,6 +44,12 @@ export function weekFromId(id) {
 const file = (id) => join(vaultRoot(), "Weekly", `${id}.md`);
 const avg = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
 
+function shift(date, n) {
+  const d = new Date(`${date}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return ymd(d);
+}
+
 function weekStats(days) {
   const all = days.map((d) => getDay(d)).filter((d) => d.exists);
   const scores = [];
@@ -67,6 +74,8 @@ function weekStats(days) {
     fun: all.reduce((s, d) => s + d.fun.length, 0),
     strongest: ranked[0]?.[0] ?? null,
     needsCare: ranked.length > 1 ? ranked.at(-1)[0] : null,
+    // The Gate: this week's choices, and last week's urgent unlocks to compare (a hint, never a limit).
+    gate: { ...gateBetween(days[0], days[6]), urgentBefore: gateBetween(shift(days[0], -7), shift(days[6], -7)).unlock },
   };
 }
 

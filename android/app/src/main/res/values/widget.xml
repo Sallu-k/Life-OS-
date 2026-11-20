@@ -2,6 +2,10 @@
 <!-- Widget colours repeat the home theme (bg, ink, ink-dim, brass CSS variables); Android resources cannot read CSS. -->
 <resources>
     <color name="widget_bg">#F0121316</color>
+    <color name="gate_bg">#121316</color>
+    <!-- The Gate's frosted buttons: a little white over the blurred screen behind. -->
+    <color name="gate_glass">#17FFFFFF</color>
+    <color name="gate_glass_line">#24FFFFFF</color>
     <color name="widget_ink">#EDE4D3</color>
     <color name="widget_dim">#A89C88</color>
     <color name="widget_brass">#E4B565</color>

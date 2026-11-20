@@ -15,6 +15,10 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
 - **Plan**: tasks on days, in a week or a month without a day, or "someday". Type them in one line
   (`Call the bank tomorrow 5pm !high every week`), add steps and notes, deadlines, start dates, repeats
   (weekdays, every N weeks, from completion), and goals for the year, month and week.
+- **Habits that fit**: each habit offers only the marks that make sense (yes/no, yes/showed up/no, or all
+  four), can count something (pages, with a daily goal), or has **parts at different times of day** (one
+  tick each, e.g. a "Meals" habit with breakfast, lunch and dinner). Today groups them by the time of day,
+  opens only the one you are in now, and folds the rest; long-press a habit for "not applicable".
 - **Anchors**: name the fixed points of your day ("Wake up 06:30", "After work 18:00") and let habits
   and tasks follow them ("15 minutes after Wake up").
 - **Reminders** (phone app): habits, tasks, deadlines and an evening wind-down, with Done and Snooze buttons.
@@ -32,10 +36,25 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
   rooms (a library hall, an arcade, a gallery) when the computer can show them.
 - Command-line helpers fetch book covers (Open Library) and game art (Steam) into new notes.
 
-**Motivation (optional, can be switched off)**
-- XP and levels that are never taken away, forgiving streaks (one missed day a week is fine),
-  **core habits** with a weekly target, a **monthly challenge** to beat your usual month, and
+**Honest progress** (no levels or XP that only ever go up)
+- Today's ring, this month compared only with **your own usual** (the 3 months before), the last 7 days
+  against the 7 before, the last 12 months as bars, the days you showed up, and habit strength that grows
+  with practice and fades slowly. These numbers can go down, so when they rise, it is real.
+- Optional: forgiving streaks (one missed day a week is fine), **core habits** with a weekly target, and
   **reward time**: minutes of something you enjoy, earned by the habits you choose.
+
+**The Gate** (optional): a pause before the screen
+- After every phone unlock (and PC sign-in or unlock) a calm screen asks "Why now?": slide to **Unlock**
+  (urgent, no questions), **Fun**, **Note** or **Task**. Fun first offers your book, then a breathing pause
+  that grows each time you start the same fun again that day, then a session that runs out and asks
+  again. Opening a watched app (e.g. a video app) without choosing Fun brings it back. Every choice is
+  logged (choice and minutes only, never text) and shows up in Insights ("you turned back 36% of the time").
+- Inspired by research on friction before distracting apps (e.g. [one sec](https://one-sec.app), a CHI 2024
+  field study). It uses no Accessibility service, so payment and bank apps keep working.
+
+**Look**
+- One calm design (OxygenOS-style dark glass, rounded cards); the accent comes from your phone's wallpaper
+  (Material You) or a colour you pick on the PC. The 3D collection rooms keep their own looks.
 
 **Optional extras**
 - A second calendar beside the date (Hebrew, Islamic, Chinese, Persian, Indian national, …) with a
@@ -93,6 +112,11 @@ Everything is ordinary Markdown with frontmatter, so you can edit it in Obsidian
   only shown live by the server. `npm run check-privacy` checks a build for journal text.
 - The server answers this PC fully; devices on your home network or [Tailscale](https://tailscale.com)
   get the API only, with the token. Set `LIFEOS_LAN=off` in `.env.local` to allow Tailscale only.
+- Requests from a web page in your PC's browser, or from a look-alike address (DNS rebinding), need the token
+  too; only Life OS's own pages and tools on this PC skip it.
+- The phone app installs only **live updates signed by your PC** (an Ed25519 key kept in
+  `%LOCALAPPDATA%/LifeOS/update-key.pem`; the public half is built into the APK) and checks every file.
+  Android backups of the app are switched off, because it holds the token and saved private notes.
 - Do not expose the server to the internet. `out/` and snapshots contain your images: do not share them.
 
 ## Phone app (Android, optional)
@@ -108,7 +132,16 @@ Needs Android Studio (SDK and JDK). Then:
 npm run app:android    # builds the site and the APK -> LifeOS-app.apk
 ```
 
-The APK contains your PC's addresses and token, so keep it to yourself (it is ignored by git).
+The APK is signed with your own key (made on the first build in `%LOCALAPPDATA%/LifeOS/`, its password
+in `.env.local`; set `LIFEOS_SIGN_NAME` for the name in it). Keep both safe: an APK signed with another key
+cannot update the installed app. The APK contains your PC's addresses and token, so keep it to yourself.
+
+Install it over USB with `npm run app:install` (USB debugging on). In some countries Play Protect blocks
+apps installed from a browser or chat app that ask for sensitive permissions; USB installs are not affected.
+
+**The Gate on the phone**: Settings › The Gate › "Gate on this phone", then allow "Display over other apps"
+(and Usage access). Some phones (OnePlus/ColorOS) block apps from opening screens in the background, so the
+Gate is drawn on top instead. Its "Gate is on" notification can be switched off without stopping it.
 
 ## Windows helpers (optional)
 
@@ -140,6 +173,8 @@ npm run import-games -- games.json
 | `npm run typecheck` | Type check |
 | `npm run check-privacy` | After a build: make sure no journal text ended up in `out/` |
 | `npm run app:android` | Build the Android app |
+| `npm run app:install` | Install the APK on a phone connected by USB |
+| `npm run icons` | Make every icon from `docs/brand/lifeos-icon.png` (Windows) |
 
 ## Built with
 

@@ -21,13 +21,14 @@ function walk(dir, root = dir, out = []) {
   return out;
 }
 
-// Each file's fingerprint is the start of its SHA-1. `version` changes whenever any file does.
+// Each file's fingerprint is the start (128 bits) of its SHA-256; the app checks every downloaded file
+// against it, and the manifest itself is signed (updateKey.mjs). `version` changes whenever any file does.
 export function siteManifest(dir, { cacheIt = true } = {}) {
   if (cacheIt && cache.has(dir)) return cache.get(dir);
   const files = {};
   for (const path of walk(dir).sort()) {
     if (APP_ONLY.has(path)) continue;
-    files[path] = createHash("sha1").update(readFileSync(join(dir, path))).digest("hex").slice(0, 16);
+    files[path] = createHash("sha256").update(readFileSync(join(dir, path))).digest("hex").slice(0, 32);
   }
   const version = createHash("sha1").update(JSON.stringify(files)).digest("hex").slice(0, 12);
   let builtAt = 0; // from out/build-info.json (scripts/stamp-build.mjs): updates only move forward

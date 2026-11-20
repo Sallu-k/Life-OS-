@@ -1,5 +1,6 @@
 "use client";
 
+import { Fold } from "./Fold";
 import { useCallback, useEffect, useState } from "react";
 import { feel } from "@/lib/feel/sounds";
 import { keptCopy, readKept } from "@/lib/offline";
@@ -60,10 +61,7 @@ function CoreHabits({ habits, r }: { habits: Day["habits"]; r: Rewards | null })
   const week = r?.week ?? [];
   const lastNight = week.find((d) => d.date === shift(today, -1))?.bedtime ?? null;
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="core-heading">
-      <h2 id="core-heading" className="font-serif text-xl text-ink">
-        Core habits
-      </h2>
+    <Fold id="core" title="Core habits" summary={`${habits.length} this week`}>
       <ul className="flex flex-col gap-3">
         {habits.map((h) => {
           // This week's marks, with today's taken live from the day.
@@ -91,7 +89,7 @@ function CoreHabits({ habits, r }: { habits: Day["habits"]; r: Rewards | null })
           );
         })}
       </ul>
-    </section>
+    </Fold>
   );
 }
 
@@ -106,13 +104,7 @@ function RewardTime({ day, r, onSave }: { day: Day; r: Rewards; onSave(c: Partia
     onSave({ played: Math.max(0, played + min) });
   };
   return (
-    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-labelledby="reward-heading">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="reward-heading" className="font-serif text-xl text-ink">
-          {r.per.label}
-        </h2>
-        <span className="font-serif text-2xl text-brass">{hm(bank)}</span>
-      </div>
+    <Fold id="reward" title={r.per.label} summary={`${hm(bank)} banked`}>
       <p className="text-sm text-ink-dim">{bank > 0 ? "Earned, guilt-free." : "Nothing banked yet: the habits below earn some."}</p>
       <ul className="flex flex-col gap-1 text-sm">
         {Object.entries(r.per.earn).map(([id, minutes]) => (
@@ -139,6 +131,6 @@ function RewardTime({ day, r, onSave }: { day: Day; r: Rewards; onSave(c: Partia
           </button>
         )}
       </div>
-    </section>
+    </Fold>
   );
 }

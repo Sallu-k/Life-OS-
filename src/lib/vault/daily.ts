@@ -8,7 +8,9 @@ import { dateToString, isRealDate, section } from "./validate";
 
 // "- [x] read", also "* [x] read" and "+ [ ] read" (Obsidian accepts all three bullets).
 // [x] done, [/] half done, [o] showed up but not complete, [ ] not done, [-] not applicable.
-const CHECKBOX = /^\s*[-*+]\s*\[( |x|X|\/|o|O|-)\]\s+(\S+)\s*$/;
+// Top-level lines only: indented ones are a habit's parts (e.g. each meal of "Meals"); the
+// habit's own line already carries the mark worked out from them.
+const CHECKBOX = /^[-*+]\s*\[( |x|X|\/|o|O|-)\]\s+(\S+)\s*$/;
 const MARKS: Record<string, HabitState> = { " ": "missed", x: "done", X: "done", "/": "half", o: "partial", O: "partial", "-": "na" };
 
 // A non-negative number from the frontmatter (e.g. productivity: 20), or null.
@@ -66,6 +68,7 @@ export function loadDaily(habits: HabitDefinition[]): LoadResult<DailyRecord> {
       mood: amount(parsed.data.mood, "mood", rel, warnings),
       sleep: amount(parsed.data.sleep_hours, "sleep_hours", rel, warnings),
       bedtime: clock(parsed.data.bedtime),
+      boredMin: amount(parsed.data.bored_min, "bored_min", rel, warnings),
       missed: reasons(parsed.data.missed),
     });
   }

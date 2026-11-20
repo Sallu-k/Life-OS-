@@ -17,7 +17,7 @@ const TABS: [Scope, string][] = [
 ];
 const HINT: Record<Scope, string> = {
   year: "The few things this year is for.",
-  month: "Month goals are also the monthly quests (XP when done or in progress).",
+  month: "Month goals are also the monthly quests on Balance.",
   week: "What this week should move forward. Private, like the weekly review.",
 };
 

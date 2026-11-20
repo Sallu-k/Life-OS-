@@ -1,11 +1,12 @@
 "use client";
 
 // How Today answers an input: a sound, a small animation, "+XP", and the bigger moments (all habits
-// done, a streak kept, a level or milestone reached). Nothing here changes data.
+// done, a streak kept, a level or rank reached). Nothing here changes data.
 import { funKind, parseFun, type FunKind } from "@/lib/fun";
 import { feel, type Feeling } from "@/lib/feel/sounds";
 import { celebrate, floatText, replay, sparkle } from "@/lib/feel/motion";
-import { dayXp, levelOf, milestoneOf } from "@/lib/vault/game";
+import { dayXp } from "@/lib/vault/game";
+import { todayScore } from "./TodayRing";
 import type { GameSnapshot } from "@/lib/vault/gameData";
 import type { Day, Mark, Task } from "./types";
 
@@ -46,23 +47,11 @@ export function markSeen(level: number): void {
   }
 }
 
-// After any change: +XP near the control, and a level-up or milestone when the running total crosses one.
+// After any change: how much it moved today's ring ("+12%"), near the control. Honest: no XP or levels.
 function reward(before: Day, after: Day, anchor: Element | null, ctx: FeelContext): void {
   if (!ctx.game) return;
-  const gain = liveXp(after) - liveXp(before);
-  if (gain > 0) floatText(anchor, `+${gain} XP`);
-  if (!ctx.snapshot) return;
-  const oldLevel = levelOf(ctx.snapshot.xp + ctx.extra.xp).level;
-  ctx.extra.xp += gain;
-  const newLevel = levelOf(ctx.snapshot.xp + ctx.extra.xp).level;
-  if (newLevel > oldLevel && newLevel > seenLevel()) {
-    const milestone = milestoneOf(newLevel) !== milestoneOf(oldLevel);
-    setTimeout(() => {
-      feel(milestone ? "milestone" : "levelUp");
-      celebrate(`Level ${newLevel}`, milestone ? "Milestone" : "Level up");
-    }, 450);
-    markSeen(newLevel);
-  }
+  const gain = (todayScore(after.habits) ?? 0) - (todayScore(before.habits) ?? 0);
+  if (gain >= 0.005) floatText(anchor, `+${Math.round(gain * 100)}%`);
 }
 
 export function reactMark(before: Day, after: Day, id: string, state: Mark | null, button: Element | null, ctx: FeelContext): void {

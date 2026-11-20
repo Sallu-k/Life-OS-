@@ -95,7 +95,8 @@ public class DevicePlugin extends Plugin {
     }
 
     /**
-     * The screen's on/off moments for last night (18:00 the evening before `date` until noon, or now):
+     * The screen's on/off moments for last night (18:00 the evening before `date` until noon, or now; or
+     * between `fromHour` and `toHour` of `date`):
      * { events: [{ t: millis, on: true|false }] }. The app works out bedtime and wake time from them
      * (src/lib/sleep.ts), so the rule can be tested and changed without a new APK.
      */
@@ -108,8 +109,9 @@ public class DevicePlugin extends Plugin {
         try {
             Calendar day = Calendar.getInstance();
             day.setTime(new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(call.getString("date")));
-            long from = day.getTimeInMillis() - 6 * 3600_000L;
-            long end = Math.min(day.getTimeInMillis() + 12 * 3600_000L, System.currentTimeMillis());
+            // Hours from midnight of `date`; the default window is last night (-6 = 18:00 the evening before).
+            long from = day.getTimeInMillis() + call.getInt("fromHour", -6) * 3600_000L;
+            long end = Math.min(day.getTimeInMillis() + call.getInt("toHour", 12) * 3600_000L, System.currentTimeMillis());
             UsageStatsManager usm = (UsageStatsManager) getContext().getSystemService(Context.USAGE_STATS_SERVICE);
             UsageEvents events = usm.queryEvents(from, end);
             UsageEvents.Event e = new UsageEvents.Event();
@@ -206,5 +208,91 @@ public class DevicePlugin extends Plugin {
         for (int i = 0; i < pending.length(); i++) ticks.put(pending.optJSONObject(i));
         ret.put("ticks", ticks);
         call.resolve(ret);
+    }
+
+    // ---------- the Gate ----------
+
+    // The Gate runs as a small always-on service (GateService), not Accessibility, so payment apps keep
+    // working. It needs "Display over other apps" and Usage access, and is switched on here.
+
+    /** The Gate's switch and permissions; (re)starts the service when it should run. If it was on before
+     *  and is off now (switched off or a permission taken back), that is logged once ("off"). */
+    @PluginMethod
+    public void gateStatus(PluginCall call) {
+        Context c = getContext();
+        GateService.apply(c); // OnePlus may have stopped it: start it again whenever the app opens
+        boolean on = GateService.enabled(c) && GateService.ready(c);
+        android.content.SharedPreferences p = GateStore.prefs(c);
+        if (on) p.edit().putBoolean("was_on", true).apply();
+        else if (p.getBoolean("was_on", false)) {
+            GateStore.log(c, "off", null, 0, null);
+            p.edit().putBoolean("was_on", false).apply();
+        }
+        JSObject ret = new JSObject();
+        ret.put("on", on);
+        ret.put("enabled", GateService.enabled(c));
+        ret.put("overlay", Settings.canDrawOverlays(c));
+        ret.put("usage", GateService.usageAccess(c));
+        call.resolve(ret);
+    }
+
+    /** Switch the Gate on or off ({ on }). */
+    @PluginMethod
+    public void gateEnable(PluginCall call) {
+        GateStore.prefs(getContext()).edit().putBoolean("enabled", Boolean.TRUE.equals(call.getBoolean("on", false))).apply();
+        GateService.apply(getContext());
+        gateStatus(call);
+    }
+
+    /** Opens the settings of the Gate's own notification, so the owner can switch it off (the Gate keeps running). */
+    @PluginMethod
+    public void openGateNotification(PluginCall call) {
+        Context c = getContext();
+        Intent intent = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+            ? new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, c.getPackageName()).putExtra(Settings.EXTRA_CHANNEL_ID, "gate")
+            : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + c.getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        c.startActivity(intent);
+        call.resolve();
+    }
+
+    /** Opens the Android screen for the first permission the Gate still needs. */
+    @PluginMethod
+    public void openGateSettings(PluginCall call) {
+        Context c = getContext();
+        Intent intent = !Settings.canDrawOverlays(c)
+            ? new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + c.getPackageName()))
+            : new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        c.startActivity(intent);
+        call.resolve();
+    }
+
+    /** The wallpaper's accent colours (Material You, Android 12+): a light one for dark mode and a deeper one for light mode. */
+    @PluginMethod
+    public void accentColors(PluginCall call) {
+        JSObject ret = new JSObject();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ret.put("dark", hex(getContext().getColor(android.R.color.system_accent1_200)));
+            ret.put("light", hex(getContext().getColor(android.R.color.system_accent1_600)));
+            ret.put("dark2", hex(getContext().getColor(android.R.color.system_accent3_200)));
+            ret.put("light2", hex(getContext().getColor(android.R.color.system_accent3_600)));
+        }
+        call.resolve(ret);
+    }
+
+    private static String hex(int color) {
+        return String.format("#%06x", color & 0xFFFFFF);
+    }
+
+    /** Sends the Gate's queue (choices, notes, tasks) and refreshes what the Gate shows. */
+    @PluginMethod
+    public void gateSync(PluginCall call) {
+        // Today's anchors ({ label: "HH:MM" }) for the Gate's "Lunch in 25 min" line.
+        JSObject times = call.getObject("times");
+        String date = call.getString("date");
+        if (times != null && date != null) GateStore.setAnchors(getContext(), date, times);
+        GateStore.syncLater(getContext());
+        call.resolve();
     }
 }

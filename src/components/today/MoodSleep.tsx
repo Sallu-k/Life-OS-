@@ -3,6 +3,7 @@
 import { late, MOODS, whenLabel } from "@/lib/dayRules";
 import { feel } from "@/lib/feel/sounds";
 import { replay } from "@/lib/feel/motion";
+import { Fold } from "./Fold";
 import type { Day } from "./types";
 
 // How the day felt (1-5) and how you slept. Saved in the daily note's frontmatter (mood, sleep_hours,
@@ -10,13 +11,12 @@ import type { Day } from "./types";
 // and they can be corrected here. The Insights page looks for what goes with good and bad days.
 export function MoodSleep({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSave(c: Partial<Day>): void }) {
   return (
-    <section className="card flex flex-col gap-4 p-4 sm:p-5" aria-labelledby="mood-heading">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id="mood-heading" className="font-serif text-xl text-ink">
-          How was the day?
-        </h2>
-        {late(day.date, day.logged.mood) && <span className="text-xs text-ink-dim">filled in later · {whenLabel(day.logged.mood)}</span>}
-      </div>
+    <Fold
+      id="mood"
+      title="How was the day?"
+      summary={[day.mood ? `Mood ${MOODS.find(([v]) => v === day.mood)?.[1] ?? day.mood}` : "Mood not set", day.sleep ? `slept ${day.sleep} h` : null].filter(Boolean).join(" · ")}
+    >
+      {late(day.date, day.logged.mood) && <span className="text-xs text-ink-dim">filled in later · {whenLabel(day.logged.mood)}</span>}
       <div className="mood-row" role="radiogroup" aria-label="Mood">
         {MOODS.map(([value, face, label]) => (
           <button
@@ -64,7 +64,7 @@ export function MoodSleep({ day, readOnly, onSave }: { day: Day; readOnly: boole
         <TimeField label="Woke this morning" value={day.woke ?? null} disabled={readOnly} onSave={(woke) => onSave({ woke })} />
         <TimeField label="To bed this evening" value={day.bedtime ?? null} disabled={readOnly} onSave={(bedtime) => onSave({ bedtime })} />
       </div>
-    </section>
+    </Fold>
   );
 }
 

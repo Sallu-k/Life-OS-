@@ -4,47 +4,27 @@ const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%
 
 function Bar({ into, need }: { into: number; need: number }) {
   return (
-    <span className="status-bar" aria-hidden="true">
+    <span className="status-bar" style={{ flex: "none" }} aria-hidden="true">
       <span style={{ width: `${Math.round((into / Math.max(1, need)) * 100)}%` }} />
     </span>
   );
 }
 
-// The game view of your habits, styled like a status window: level, XP, area stats,
-// habit strength with forgiving streaks, weekly and monthly reviews, and this month's quests.
+// Areas and habits, styled like a status window: area strength, weekly and monthly reviews, habit strength
+// with forgiving streaks, and this month's quests. No levels or XP: progress is the ProgressCard above.
 export function StatusWindow({ game }: { game: GameState }) {
   return (
-    <section aria-labelledby="status-heading" className="card system-window flex flex-col gap-8 p-5 sm:p-8">
-      <div className="flex flex-wrap items-center gap-6">
-        <div className="status-rank" aria-label={`Level ${game.level}`}>
-          {game.level}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="eyebrow">Status</p>
-          <h2 id="status-heading" className="font-serif text-3xl text-ink">
-            Level {game.level}
-          </h2>
-          <div className="mt-2 flex items-center gap-3 text-xs text-ink-dim">
-            <Bar into={game.into} need={game.need} />
-            <span>
-              {game.into.toLocaleString("en-GB")} / {game.need.toLocaleString("en-GB")} XP · {game.xp.toLocaleString("en-GB")} total
-            </span>
-          </div>
-        </div>
-      </div>
-
+    <section aria-label="Areas and habits" className="card system-window flex flex-col gap-8 p-5 sm:p-8">
       <div>
-        <h3 className="status-h">Stats</h3>
+        <h3 className="status-h">Areas</h3>
         <ul className="grid gap-3 sm:grid-cols-2">
           {game.areas.map((a) => (
             <li key={a.id} className="flex flex-col gap-1">
               <span className="flex items-baseline justify-between text-sm">
                 <span className="text-ink">{a.label}</span>
-                <span className="text-xs text-ink-dim">
-                  Lv {a.level} · strength {pct(a.strength)}
-                </span>
+                <span className="text-xs text-ink-dim">strength {pct(a.strength)}</span>
               </span>
-              <Bar into={a.into} need={a.need} />
+              <Bar into={Math.round((a.strength ?? 0) * 100)} need={100} />
             </li>
           ))}
         </ul>
@@ -57,7 +37,7 @@ export function StatusWindow({ game }: { game: GameState }) {
 
       <div>
         <h3 className="status-h">Habit strength</h3>
-        <p className="mb-3 text-xs text-ink-dim">Recent days count most (about a two-week memory). Streaks forgive one miss a week, and XP is never taken away.</p>
+        <p className="mb-3 text-xs text-ink-dim">Recent days count most (about a two-week memory), so strength grows with practice and fades slowly when you skip, like a real habit. Streaks forgive one miss a week.</p>
         <ul className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
           {game.habits
             .filter((h) => h.active)
@@ -77,7 +57,7 @@ export function StatusWindow({ game }: { game: GameState }) {
         </ul>
       </div>
 
-      <ChallengeCard challenge={game.challenge} />
+
 
       {game.quests.length > 0 && (
         <div>
@@ -88,12 +68,11 @@ export function StatusWindow({ game }: { game: GameState }) {
                 <span className="text-ink">{q.text}</span>
                 <span className="shrink-0 text-xs text-ink-dim">
                   {q.status}
-                  {q.xp > 0 && ` · +${q.xp} XP`}
                 </span>
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-ink-dim">Quests are the goals in your month notes (Journal/YYYY-MM.md). A completed goal gives 100 XP.</p>
+          <p className="mt-2 text-xs text-ink-dim">Quests are the goals in your month notes (Journal/YYYY-MM.md).</p>
         </div>
       )}
     </section>
@@ -106,11 +85,9 @@ function Review({ now, before }: { now: Period; before: Period }) {
     <div className="status-review">
       <h3 className="status-h">{now.label}</h3>
       {now.days === 0 ? (
-        <p className="text-sm text-ink-dim">Nothing logged yet. Every habit you tick on Today adds XP here.</p>
+        <p className="text-sm text-ink-dim">Nothing logged yet.</p>
       ) : (
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-          <dt className="text-ink-dim">XP gained</dt>
-          <dd className="text-ink">+{now.xp.toLocaleString("en-GB")}</dd>
           <dt className="text-ink-dim">Days logged</dt>
           <dd className="text-ink">{now.days}</dd>
           <dt className="text-ink-dim">Consistency</dt>
@@ -132,30 +109,6 @@ function Review({ now, before }: { now: Period; before: Period }) {
           )}
         </dl>
       )}
-    </div>
-  );
-}
-
-// This month's challenge: beat your usual month; the bar fills with the XP you earn.
-function ChallengeCard({ challenge }: { challenge: GameState["challenge"] }) {
-  const share = Math.min(100, Math.round((challenge.damage / challenge.hp) * 100));
-  return (
-    <div className="challenge-card">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="status-h">Monthly challenge</h3>
-        <span className="text-xs text-ink-dim">
-          {challenge.record.months > 0 ? `${challenge.record.defeated} of ${challenge.record.months} past months beaten` : "first month"}
-        </span>
-      </div>
-      <p className="font-serif text-xl text-ink">Beat your usual month</p>
-      <span className="challenge-hp" aria-label={`${share}% of the target`}>
-        <span style={{ width: `${share}%` }} />
-      </span>
-      <p className="text-xs text-ink-dim">
-        {challenge.defeated
-          ? `Done: ${challenge.damage} XP against a target of ${challenge.hp}.`
-          : `${challenge.damage} of ${challenge.hp} XP · ${challenge.daysLeft} day${challenge.daysLeft === 1 ? "" : "s"} left · every habit and task counts. Missing it costs nothing.`}
-      </p>
     </div>
   );
 }

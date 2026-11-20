@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Gate's buttons: outlined, like the site's chips. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="@color/widget_line_strong">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/gate_glass" />
+            <stroke android:width="1dp" android:color="@color/gate_glass_line" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+</ripple>

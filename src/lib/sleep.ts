@@ -46,3 +46,22 @@ export function nightFromEvents(events: ScreenEvent[], midnight: number): Night 
   const best = nights.reduce((a, b) => (b.to - b.from > a.to - a.from ? b : a));
   return { bed: hhmm(best.from), wake: hhmm(best.to), hours: Math.round((best.to - best.from - best.awake) / 360000) / 10 };
 }
+
+// Bored time: the longest stretch the phone screen stayed off between `from` and `to` (milliseconds),
+// in whole minutes; null when there are no screen events. Before the first event the screen is taken to
+// be in the opposite state (an "on" event means it was off until then).
+export function longestOff(events: ScreenEvent[], from: number, to: number): number | null {
+  const sorted = events.filter((e) => e.t >= from && e.t <= to).sort((a, b) => a.t - b.t);
+  if (!sorted.length) return null;
+  let off: number | null = sorted[0].on ? from : null;
+  let best = 0;
+  for (const e of sorted) {
+    if (!e.on) off ??= e.t;
+    else if (off !== null) {
+      best = Math.max(best, e.t - off);
+      off = null;
+    }
+  }
+  if (off !== null) best = Math.max(best, to - off);
+  return Math.round(best / 60_000);
+}

@@ -19,8 +19,21 @@ interface HabitDef {
   offset?: number;
   core?: boolean;
   weekly?: number;
+  marks?: string[];
+  unit?: string;
+  goal?: number;
+  parts?: { id: string; label: string; anchor?: string }[];
   isNew?: boolean;
 }
+
+// What a habit records: which marks it offers, or an amount (scripts/lib/days.mjs writeHabits).
+const KINDS: [string, string, Partial<HabitDef>][] = [
+  ["all", "Done · half · showed up · not", { marks: undefined, unit: undefined, goal: undefined }],
+  ["yesno", "Yes or no", { marks: ["done", "missed"], unit: undefined, goal: undefined }],
+  ["showed", "Yes · showed up · no", { marks: ["done", "partial", "missed"], unit: undefined, goal: undefined }],
+  ["count", "A number (e.g. pages)", { marks: undefined, unit: "pages" }],
+];
+const kindOf = (h: HabitDef) => (h.unit ? "count" : h.marks?.join() === "done,missed" ? "yesno" : h.marks?.join() === "done,partial,missed" ? "showed" : "all");
 
 const WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const daysOf = (d: HabitDef["days"]): string[] =>
@@ -115,6 +128,30 @@ export function HabitManager({ onClose }: { onClose(saved: boolean): void }) {
                       </select>
                       <input className="today-input" placeholder="Target, e.g. 10 pages" value={h.target ?? ""} onChange={(e) => update(i, { target: e.target.value })} aria-label="Target" />
                     </div>
+                    {h.parts?.length ? (
+                      <p className="text-xs text-ink-dim">
+                        One tick per part: {h.parts.map((p) => p.label).join(", ")} (set in _system/habits.md).
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <select className="today-input" value={kindOf(h)} onChange={(e) => update(i, KINDS.find(([k]) => k === e.target.value)![2])} aria-label="What it records">
+                          {KINDS.map(([k, label]) => (
+                            <option key={k} value={k}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                        {h.unit !== undefined && (
+                          <>
+                            <input className="today-input" value={h.unit} onChange={(e) => update(i, { unit: e.target.value })} aria-label="Unit" placeholder="pages" />
+                            <label className="flex items-center gap-2 text-xs text-ink-dim">
+                              <input className="today-input w-16" type="number" min={1} max={1000} value={h.goal ?? ""} onChange={(e) => update(i, { goal: Number(e.target.value) || undefined })} aria-label="Daily goal" />
+                              a day = done
+                            </label>
+                          </>
+                        )}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       <select className="today-input" value={h.after ?? ""} onChange={(e) => update(i, { after: e.target.value || undefined })} aria-label="Follows an anchor">
                         <option value="">No anchor</option>
@@ -130,7 +167,7 @@ export function HabitManager({ onClose }: { onClose(saved: boolean): void }) {
                           min after
                         </label>
                       )}
-                      <label className="flex items-center gap-2 text-xs text-ink-dim" title="One of your few most important habits: double XP and a weekly target instead of a streak">
+                      <label className="flex items-center gap-2 text-xs text-ink-dim" title="One of your few most important habits: a weekly target instead of a streak">
                         <input type="checkbox" checked={Boolean(h.core)} onChange={(e) => update(i, { core: e.target.checked, weekly: h.weekly ?? 5 })} />★ Core habit
                       </label>
                       {h.core && (

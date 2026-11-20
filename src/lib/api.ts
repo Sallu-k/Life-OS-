@@ -43,11 +43,14 @@ export const getServerUrl = () => {
 // is saved yet, so a fresh install connects without typing. Read once.
 let bundled: Promise<void> | null = null;
 export function loadBundledPc(): Promise<void> {
-  if (getServerUrls().length && getToken()) return Promise.resolve();
   bundled ??= fetch("/lifeos-pc.json", { cache: "no-store" })
     .then((r) => r.json() as Promise<{ urls?: string[]; token?: string }>)
     .then((b) => {
-      if (!getServerUrls().length && b.urls?.length) setServerUrls(b.urls);
+      // Addresses built into the app are added to the saved ones (saved first), so a new APK never
+      // loses an address the phone already knew, and the phone learns new ones without typing.
+      const saved = getServerUrls();
+      const extra = (b.urls ?? []).map((u) => u.replace(/\/+$/, "")).filter((u) => !saved.includes(u));
+      if (extra.length) setServerUrls([...saved, ...extra]);
       if (!getToken() && b.token) setToken(b.token);
     })
     .catch(() => undefined);

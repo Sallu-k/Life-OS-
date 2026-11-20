@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { loadDaily } from "@/lib/vault/daily";
 import { loadHabitDefinitions } from "@/lib/vault/habits";
 import { findInsights } from "@/lib/vault/insights";
+import { gateFindings, loadGate } from "@/lib/vault/gate";
 import { loadSettings } from "@/lib/vault/settings";
 
 export const metadata: Metadata = { title: "Insights" };
@@ -15,12 +16,13 @@ const TONE = { good: "insight-good", care: "insight-care", neutral: "" } as cons
 export default function InsightsPage() {
   const habits = loadHabitDefinitions().items;
   const records = loadDaily(habits).items;
-  const findings = findInsights(records, habits, loadSettings().sleepBy);
+  const today = new Date().toISOString().slice(0, 10);
+  const findings = [...findInsights(records, habits, loadSettings().sleepBy), ...gateFindings(loadGate(), records, today)];
   const withMood = records.filter((r) => r.mood !== null).length;
   const withSleep = records.filter((r) => r.sleep !== null).length;
 
   return (
-    <main data-theme="dashboard" className="mx-auto w-full max-w-3xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+    <main className="mx-auto w-full max-w-3xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="Patterns" title="Insights" stats={[`${records.length} days looked at`, "patterns, not proof"]} />
 
       {findings.length === 0 ? (

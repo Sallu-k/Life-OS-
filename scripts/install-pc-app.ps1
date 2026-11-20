@@ -8,7 +8,7 @@ param([switch]$NoStartup)
 $repo = Split-Path -Parent $PSScriptRoot
 $script = Join-Path $repo "scripts\pc-app.ps1"
 $shell = New-Object -ComObject WScript.Shell
-$icon = Join-Path $repo "public\icons\lifeos.ico"  # the LifeOS mark (scripts/make-icons.mjs)
+$icon = Join-Path $repo "public\icons\lifeos.ico"  # the LifeOS icon (scripts/make-icons.ps1)
 
 $launcher = & (Join-Path $PSScriptRoot "make-launcher.ps1") | Select-Object -Last 1
 
@@ -31,6 +31,16 @@ function New-Shortcut($path, $arguments, $description, [switch]$App) {
 
 New-Shortcut (Join-Path ([Environment]::GetFolderPath("Desktop")) "LifeOS.lnk") "" "Open LifeOS" -App
 New-Shortcut (Join-Path ([Environment]::GetFolderPath("Programs")) "LifeOS.lnk") "" "Open LifeOS" -App
+# Listed in Windows Settings > Apps > Installed apps as "LifeOS" (publisher: $env:LIFEOS_SIGN_NAME, default "LifeOS"). Uninstall there runs
+# "Remove LifeOS.cmd" (stops LifeOS, removes the shortcuts and this entry; the vault is never touched).
+$key = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\LifeOS"
+New-Item -Path $key -Force | Out-Null
+$entry = @{ DisplayName = "LifeOS"; Publisher = $(if ($env:LIFEOS_SIGN_NAME) { $env:LIFEOS_SIGN_NAME } else { "LifeOS" }); DisplayIcon = $icon; InstallLocation = $repo; DisplayVersion = "1.0"
+  UninstallString = "cmd.exe /c `"$(Join-Path $repo 'Remove LifeOS.cmd')`"" }
+foreach ($name in $entry.Keys) { Set-ItemProperty -Path $key -Name $name -Value $entry[$name] }
+Set-ItemProperty -Path $key -Name NoModify -Value 1 -Type DWord
+Set-ItemProperty -Path $key -Name NoRepair -Value 1 -Type DWord
+
 if (-not $NoStartup) {
   New-Shortcut (Join-Path ([Environment]::GetFolderPath("Startup")) "LifeOS server.lnk") "-ServerOnly" "Start the LifeOS server at sign-in"
 }

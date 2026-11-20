@@ -26,6 +26,7 @@ interface Review {
     fun: number;
     strongest: string | null;
     needsCare: string | null;
+    gate?: { gates: number; unlock: number; fun: number; read: number; more: number; funMinutes: number; urgentBefore: number };
   };
   wins: string;
   lessons: string;
@@ -117,6 +118,7 @@ export function WeeklyReview() {
             {tile("Pages read", s.pages)}
             {tile("Tasks done", s.tasksDone)}
           </div>
+          {s.gate && s.gate.gates > 0 && <GateWeek g={s.gate} />}
           {(s.strongest || s.needsCare) && (
             <p className="text-sm text-ink-dim">
               {s.strongest && (
@@ -148,5 +150,16 @@ export function WeeklyReview() {
         </>
       )}
     </div>
+  );
+}
+
+// The Gate's week: why the screens were opened. Many "urgent" unlocks get a gentle question, never a limit.
+function GateWeek({ g }: { g: NonNullable<Review["stats"]["gate"]> }) {
+  const up = g.unlock > g.urgentBefore + 5 && g.unlock >= 20;
+  return (
+    <p className="text-sm text-ink-dim">
+      The Gate: <span className="text-ink">{g.gates}</span> unlocks, {g.unlock} urgent, {g.fun} for fun ({g.funMinutes} min{g.more ? `, extended ${g.more} times` : ""}), the book won {g.read}.
+      {up && ` ${g.unlock} urgent unlocks, up from ${g.urgentBefore} last week. Were they all urgent?`}
+    </p>
   );
 }

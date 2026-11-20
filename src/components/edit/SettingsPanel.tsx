@@ -9,6 +9,8 @@ import { flush } from "@/lib/offline";
 import { openUsageSettings, pinWidget, usageAccess } from "@/lib/device";
 import { DaySettings } from "./DaySettings";
 import { RewardSettings } from "./RewardSettings";
+import { GateSettings } from "./GateSettings";
+import { LookSettings } from "./LookSettings";
 import { ReadingGoal } from "./ReadingGoal";
 import { BackupSettings } from "./BackupSettings";
 import { allowExactReminders, exactReminders } from "@/lib/phoneReminders";
@@ -118,6 +120,8 @@ export function SettingsPanel() {
         )}
       </div>
       {canEdit && server.day && <DaySettings setup={server.day} />}
+      {canEdit && <LookSettings />}
+      {canEdit && <GateSettings />}
       {canEdit && <RewardSettings />}
       {canEdit && <ReadingGoal />}
       {server && server.local && !app && <BackupSettings />}
@@ -155,7 +159,7 @@ function PhoneHelp({ addresses }: { addresses: string[] }) {
   );
 }
 
-// Turns the game layer (XP, levels, rank, streaks, reviews) on or off. Saved in _system/settings.md.
+// Turns the game layer (habit strength, streaks, reviews, quests, the reaction pops) on or off. Saved in _system/settings.md.
 function GameSwitch({ on }: { on: boolean }) {
   const [value, setValue] = useState(on);
   const [msg, setMsg] = useState("");
@@ -173,7 +177,7 @@ function GameSwitch({ on }: { on: boolean }) {
     <div className="card flex flex-col gap-3 p-5 text-sm">
       <label className="flex items-center gap-3">
         <input type="checkbox" className="h-5 w-5 accent-[var(--brass)]" checked={value} onChange={(e) => toggle(e.target.checked)} />
-        <span className="text-ink">Game layer: XP, levels, rank, streaks and weekly reviews</span>
+        <span className="text-ink">Game layer: habit strength, streaks, reviews and quests</span>
       </label>
       <p className="text-ink-dim">Turning it off only hides it; your habit data and the Life areas graph stay the same, and you can turn it back on any time.</p>
       {msg && <p className="text-ink-dim">{msg}</p>}

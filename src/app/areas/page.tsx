@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { BalanceExplorer } from "@/components/BalanceExplorer";
 import { StatusWindow } from "@/components/StatusWindow";
-import { LevelReveal } from "@/components/feel/LevelReveal";
+import { ProgressCard } from "@/components/ProgressCard";
+import { computeProgress } from "@/lib/vault/progress";
 import { PageHeader } from "@/components/PageHeader";
 import { VaultWarnings } from "@/components/VaultWarnings";
 import { loadAchievements } from "@/lib/vault/achievements";
@@ -44,11 +45,12 @@ export default function BalancePage() {
   const game = computeGame(habits, daily.items, areas.items, earned, loadMonthNotes().items, toYmd(new Date()), [...loadBooks().items.filter((b) => b.status === "finished").map((b) => ({ kind: "book" as const, finished: b.finished })), ...loadGames().items.filter((g) => g.status === "finished").map((g) => ({ kind: "game" as const, finished: g.finished }))]);
 
   return (
-    <main data-theme="dashboard" className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
-      <PageHeader eyebrow="Overview" title="Life areas" stats={showGame ? [`Level ${game.level}`, "XP is never taken away"] : ["Each area of life, one month at a time"]} />
+    <main className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+      <PageHeader eyebrow="Overview" title="Life areas" stats={["Compared only with you", "Each area of life, one month at a time"]} />
 
+      <ProgressCard p={computeProgress(daily.items)} />
+      {showGame && <div className="h-6" />}
       {showGame && <StatusWindow game={game} />}
-      {showGame && <LevelReveal level={game.level} />}
       <div className="h-12" />
 
       {areas.items.filter((a) => a.active).length === 0 ? (

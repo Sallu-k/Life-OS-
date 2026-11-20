@@ -1,6 +1,5 @@
 import { OnThisDay } from "@/components/OnThisDay";
 import { onThisDay } from "@/lib/vault/insights";
-import { LevelReveal } from "@/components/feel/LevelReveal";
 import { BalanceChart } from "@/components/BalanceChart";
 import { HomeHub } from "@/components/HomeHub";
 import { MonthCells } from "@/components/MonthStrip";
@@ -11,10 +10,8 @@ import { plural } from "@/lib/format";
 import { loadAchievements } from "@/lib/vault/achievements";
 import { loadAreas } from "@/lib/vault/areas";
 import { computeBalance, defaultWindow, MIN_DAYS, resolveAreas } from "@/lib/vault/balance";
-import { computeGame } from "@/lib/vault/game";
-import { loadSettings } from "@/lib/vault/settings";
+import { computeProgress, type Progress } from "@/lib/vault/progress";
 import { toYmd } from "@/lib/vault/habitWindow";
-import { loadMonthNotes } from "@/lib/vault/months";
 import { loadBooks } from "@/lib/vault/books";
 import { loadCertificates } from "@/lib/vault/certificates";
 import { balanceExtras } from "@/lib/vault/balanceData";
@@ -49,7 +46,6 @@ export default function Home() {
     balanceExtras(daily.items),
     defaultWindow(new Date()).days,
   );
-  const game = computeGame(habits.items, daily.items, areas.items, achievements.items, loadMonthNotes().items, toYmd(new Date()), [...books.items.filter((b) => b.status === "finished").map((b) => ({ kind: "book" as const, finished: b.finished })), ...games.items.filter((g) => g.status === "finished").map((g) => ({ kind: "game" as const, finished: g.finished }))]);
   const finishedGames = games.items.filter((g) => g.status === "finished").length;
   const activeHabits = habits.items.filter((h) => h.active).length;
 
@@ -59,14 +55,13 @@ export default function Home() {
     certificates: countLine(certificates.items.length, "certificate", "No certificates yet"),
     achievements: countLine(achievements.items.length, "moment", "No achievements yet"),
     habits: countLine(activeHabits, "active habit", "No habits yet") + (daily.items.length > 0 ? ` · ${daily.items.length} days logged` : ""),
-    balance: loadSettings().game ? `Level ${game.level}` : "How each area of life is going",
+    balance: balanceLine(computeProgress(daily.items)),
   };
 
   return (
     <main data-theme="home" className="mx-auto w-full max-w-6xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       {/* In the Android app this HTML is also served for other addresses: jump to that page's own file. */}
       <script dangerouslySetInnerHTML={{ __html: HOME_ONLY }} />
-      {loadSettings().game && <LevelReveal level={game.level} />}
       <PageHeader eyebrow="Welcome back" title="LifeOS" stats={["Everything in one place"]} />
 
       <HomeHub
@@ -143,4 +138,13 @@ export default function Home() {
       <VaultWarnings warnings={warnings} />
     </main>
   );
+}
+
+// The Balance tile: this month against your own usual (src/lib/vault/progress.ts).
+function balanceLine(p: Progress): string {
+  if (p.month.score === null) return "How each area of life is going";
+  const now = `This month ${Math.round(p.month.score * 100)}%`;
+  if (p.month.diff === null) return now;
+  const d = Math.round(p.month.diff * 100);
+  return d === 0 ? `${now} · right at your usual` : `${now} · ${Math.abs(d)} ${d > 0 ? "above" : "below"} your usual`;
 }

@@ -4,7 +4,7 @@ import Link from "next/link";
 export function SiteFooter() {
   const built = new Date().toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
   return (
-    <footer className="mt-auto border-t border-ink-dim/10">
+    <footer className="site-footer mt-auto border-t border-ink-dim/10">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-6 text-xs text-ink-dim sm:px-8">
         <span>
           <span className="text-brass" aria-hidden="true">✦ </span>

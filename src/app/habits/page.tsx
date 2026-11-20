@@ -2,6 +2,7 @@ import { YearSquares } from "@/components/YearSquares";
 import { yearSquares } from "@/lib/vault/insights";
 import type { Metadata } from "next";
 import { HabitsExplorer } from "@/components/HabitsExplorer";
+import { HabitOverview } from "@/components/HabitOverview";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/Prose";
 import { VaultWarnings } from "@/components/VaultWarnings";
@@ -31,6 +32,8 @@ export default function HabitsPage() {
     <main data-theme="minimal" className="mx-auto w-full max-w-5xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="Rhythm" title="Habits" stats={[`${days.length} days logged`, "no streaks, no pressure"]} />
 
+      <HabitOverview habits={defs.items} records={daily.items} />
+      <div className="h-10" />
       <HabitsExplorer habits={defs.items} days={days} notes={notes.items} current={toYmd(new Date()).slice(0, 7)} />
 
       <section className="mt-16 flex flex-col gap-4" aria-labelledby="year-squares-heading">

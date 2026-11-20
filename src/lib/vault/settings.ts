@@ -8,6 +8,7 @@ export interface Settings {
   game: boolean;
   goalBooks: number | null; // books to finish this year (Library reading panel)
   sleepBy: string; // the early-night target, "HH:MM" (Insights: early vs late nights)
+  accent: string | null; // accent colour picked in Settings ("#3d7cf4"); null = the theme's default
 }
 
 
@@ -17,8 +18,9 @@ export function loadSettings(): Settings {
     const data = fs.existsSync(file) ? matter(fs.readFileSync(file, "utf8")).data : {};
     const goal = Number(data.reading?.goalBooks);
     const by = typeof data.sleep?.by === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(data.sleep.by) ? data.sleep.by : "23:00";
-    return { game: data.game !== false, goalBooks: Number.isInteger(goal) && goal > 0 ? goal : null, sleepBy: by };
+    const accent = typeof data.theme?.accent === "string" && /^#[0-9a-fA-F]{6}$/.test(data.theme.accent) ? data.theme.accent : null;
+    return { game: data.game !== false, goalBooks: Number.isInteger(goal) && goal > 0 ? goal : null, sleepBy: by, accent };
   } catch {
-    return { game: true, goalBooks: null, sleepBy: "23:00" };
+    return { game: true, goalBooks: null, sleepBy: "23:00", accent: null };
   }
 }
