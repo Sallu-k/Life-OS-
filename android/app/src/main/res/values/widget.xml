@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget colours repeat the home theme (bg, ink, ink-dim, brass CSS variables); Android resources cannot read CSS. -->
+<resources>
+    <color name="widget_bg">#F0121316</color>
+    <color name="widget_ink">#EDE4D3</color>
+    <color name="widget_dim">#A89C88</color>
+    <color name="widget_brass">#E4B565</color>
+    <color name="widget_line">#26A89C88</color>
+    <color name="widget_line_strong">#55A89C88</color>
+    <string name="widget_empty">Open LifeOS once to show today\'s habits here.</string>
+    <string name="widget_description">Today\'s habits: tap to tick one done.</string>
+    <string name="task_widget_empty">No tasks for today or this week. Tap + to plan one.</string>
+    <string name="task_widget_description">Overdue, today\'s and this week\'s tasks: tap to tick, + to plan.</string>
+</resources>

@@ -1,0 +1,7 @@
+// Gradle init script used by scripts/build-app.mjs: builds into ../.android-build instead of android/*/build,
+// so an editor that keeps the Android project open (e.g. VS Code's Java extension) cannot lock the output.
+gradle.projectsLoaded {
+    rootProject.allprojects { p ->
+        p.layout.buildDirectory = new File(rootProject.projectDir.parentFile, ".android-build/" + p.name)
+    }
+}

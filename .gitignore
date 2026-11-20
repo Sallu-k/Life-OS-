@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+.site/
+.android-build/
+*.apk
+.env.local
+public/vault-assets/
+*.tsbuildinfo
+next-env.d.ts
+snapshots/
+android/app/src/main/assets/public/
+android/app/src/main/assets/lifeos-pc.json

@@ -1,0 +1,47 @@
+{
+  "name": "lifeos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "sync-assets": "node scripts/sync-assets.mjs",
+    "predev": "npm run sync-assets",
+    "dev": "next dev",
+    "prebuild": "npm run sync-assets",
+    "build": "next build",
+    "postbuild": "node scripts/fix-export-segments.mjs && node scripts/stamp-build.mjs",
+    "typecheck": "tsc --noEmit",
+    "add-book": "node scripts/add-book.mjs",
+    "add-game": "node scripts/add-game.mjs",
+    "add-certificate": "node scripts/add-certificate.mjs",
+    "check-privacy": "node scripts/check-privacy.mjs",
+    "import-games": "node scripts/import-games.mjs",
+    "import-books": "node scripts/import-books.mjs",
+    "start": "node scripts/lifeos-server.mjs",
+    "app:android": "node scripts/build-app.mjs",
+    "pc:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-pc-app.ps1",
+    "pc:open": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pc-app.ps1",
+    "pc:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pc-app.ps1 -Stop"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
+    "gray-matter": "^4.0.3",
+    "next": "^16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
+    "@tailwindcss/postcss": "^4.3.4",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.4",
+    "typescript": "^7.0.2"
+  },
+  "license": "MIT"
+}

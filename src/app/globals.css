@@ -1,0 +1,2173 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Themes. Every colour and font lives here as a variable; components only use the tokens.
+   Each section picks its theme with <main data-theme="..."> and the whole page follows
+   (header, footer and background too), via :root:has(...). No script, no flash.
+     Home             -> home       (a blend of every section's colours)
+     Library + books  -> brass      (warm brass and wood, default, no data-theme)
+     Games            -> arcade     (retro-future arcade)
+     Habits           -> minimal    (light paper)
+     Certificates     -> gallery    (museum wall)
+     Achievements     -> trophy     (burgundy and gold trophy room)
+     Life areas       -> dashboard  (dark blue status panel, spider graph)
+   ============================================================ */
+
+/* Brass: warm brass and copper on dark wood, with a cool teal glow for interactive bits. The default. */
+:root {
+  --bg: #11100f;
+  --surface: #1b1917;
+  --surface-hi: #272320;
+  --brass: #c8913a;
+  --copper: #b5653a;
+  --glow: #4fe3d8; /* teal glow: hover, focus and active states only */
+  --hex-line: #dcb765; /* thin gold linework */
+  --ink: #ede4d3;
+  --ink-dim: #a89c88;
+
+  --font-book: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --font-label: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --title-case: none;
+  --title-spacing: -0.01em;
+  --title-weight: 400;
+  --title-shadow: none;
+  --page-bg:
+    radial-gradient(60rem 30rem at 50% -8rem, color-mix(in srgb, var(--brass) 14%, transparent), transparent 70%),
+    radial-gradient(40rem 30rem at 100% 100%, color-mix(in srgb, var(--copper) 7%, transparent), transparent 70%),
+    var(--bg);
+  color-scheme: dark;
+}
+
+/* Retro-future (games): neon sunset over a night grid. Bahnschrift is built into Windows. */
+:root:has(main[data-theme="arcade"]) {
+  --bg: #0b0c1d;
+  --surface: #15173a;
+  --surface-hi: #20234f;
+  --brass: #ff9e5e;
+  --copper: #ff4fa3;
+  --glow: #3ef0e0;
+  --ink: #f1efff;
+  --ink-dim: #a9a6d6;
+
+  --font-book: "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --font-label: "Cascadia Mono", Consolas, ui-monospace, "SF Mono", monospace;
+  --title-case: uppercase;
+  --title-spacing: 0.06em;
+  --title-shadow: 0 0 22px color-mix(in srgb, var(--copper) 45%, transparent), 0 0 2px color-mix(in srgb, var(--glow) 50%, transparent);
+  --page-bg:
+    radial-gradient(55rem 26rem at 50% -6rem, color-mix(in srgb, var(--copper) 22%, transparent), transparent 70%),
+    radial-gradient(40rem 24rem at 0% 100%, color-mix(in srgb, var(--glow) 9%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Minimalist (habits): light paper, near-black ink, one quiet sage accent. */
+:root:has(main[data-theme="minimal"]) {
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-hi: #ece9e1;
+  --brass: #46705a;
+  --copper: #8d887d;
+  --glow: #2d5f8b;
+  --ink: #1d1c1a;
+  --ink-dim: #625e56;
+
+  --font-book: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --title-weight: 300;
+  --title-spacing: -0.02em;
+  --page-bg: var(--bg);
+  color-scheme: light;
+}
+
+/* Gallery (certificates, achievements): ink-blue museum wall, ivory text, a soft spotlight. */
+:root:has(main[data-theme="gallery"]) {
+  --bg: #0f131b;
+  --surface: #181d27;
+  --surface-hi: #222937;
+  --brass: #d6bd85;
+  --copper: #8fa6bf;
+  --glow: #efe3c4;
+  --ink: #f3eee3;
+  --ink-dim: #a6adbb;
+
+  --page-bg:
+    radial-gradient(48rem 30rem at 50% -10rem, color-mix(in srgb, var(--ink) 11%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Trophy room (achievements): deep burgundy, warm gold, champagne ink, a spotlight from above. */
+:root:has(main[data-theme="trophy"]) {
+  --bg: #170b10;
+  --surface: #251218;
+  --surface-hi: #341a22;
+  --brass: #e0b458;
+  --copper: #d9697c;
+  --glow: #f5dc92;
+  --ink: #f7ecda;
+  --ink-dim: #c9aea8;
+
+  --page-bg:
+    radial-gradient(44rem 26rem at 50% -8rem, color-mix(in srgb, var(--brass) 20%, transparent), transparent 70%),
+    radial-gradient(40rem 30rem at 0% 100%, color-mix(in srgb, var(--copper) 12%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* Home: a calm charcoal base. The page itself stays neutral; every section tile glows only in
+   its own accent colour. The --home-* colours are used only on this page. */
+:root:has(main[data-theme="home"]) {
+  --bg: #121316;
+  --surface: #1a1c20;
+  --surface-hi: #24272c;
+  --brass: #e4b565;
+  --copper: #9aa0ad;
+  --glow: #7fe7dc;
+  --ink: #eeece7;
+  --ink-dim: #a4a7af;
+
+  --home-library: #dcb765;
+  --home-games: #ff6fb0;
+  --home-certificates: #93aac4;
+  --home-achievements: #e6697f;
+  --home-habits: #86b894;
+  --home-balance: #5db4ff;
+
+  --page-bg:
+    radial-gradient(50rem 22rem at 50% -8rem, color-mix(in srgb, var(--ink) 6%, transparent), transparent 70%),
+    var(--bg);
+}
+
+/* System (balance): a dark status-window look, electric blue lines on near-black. */
+:root:has(main[data-theme="dashboard"]) {
+  --bg: #050813;
+  --surface: #0a1022;
+  --surface-hi: #121b36;
+  --brass: #5db4ff;
+  --copper: #8a7bff;
+  --glow: #8fe0ff;
+  --ink: #e8f2ff;
+  --ink-dim: #93a8c9;
+
+  --font-label: "Cascadia Mono", Consolas, ui-monospace, "SF Mono", monospace;
+  --title-case: uppercase;
+  --title-spacing: 0.14em;
+  --title-weight: 300;
+  --title-shadow: 0 0 24px color-mix(in srgb, var(--brass) 55%, transparent);
+  --page-bg:
+    radial-gradient(48rem 26rem at 50% -6rem, color-mix(in srgb, var(--brass) 20%, transparent), transparent 70%),
+    radial-gradient(36rem 26rem at 100% 100%, color-mix(in srgb, var(--copper) 12%, transparent), transparent 70%),
+    var(--bg);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hi: var(--surface-hi);
+  --color-brass: var(--brass);
+  --color-copper: var(--copper);
+  --color-glow: var(--glow);
+  --color-ink: var(--ink);
+  --color-ink-dim: var(--ink-dim);
+  /* Local fonts only (no CDN). "font-serif" follows the section's theme. */
+  --font-serif: var(--font-book);
+}
+
+/* ---------- Base ---------- */
+
+/* The page background sits on <html>, so decorative layers (the retro grid) can sit between it and the content. */
+html {
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+}
+/* Decorations (glows, 3D overflow) must never make the page wider than the screen: on a phone that
+   zooms the whole page out. "clip" (not "hidden") keeps sticky headers working. */
+html,
+body {
+  overflow-x: clip;
+}
+
+/* The page background is one fixed layer the browser paints once, so scrolling stays cheap. */
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background: var(--page-bg);
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brass) 40%, transparent);
+  color: var(--ink);
+}
+
+/* Keyboard focus is always visible. */
+:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 3px;
+}
+
+/* ---------- Shared pieces ---------- */
+
+/* Small spaced-out label above titles and sections. */
+.eyebrow {
+  font-family: var(--font-label);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+
+/* A thin brass line that trails after a label. */
+.ornament {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.ornament::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brass) 45%, transparent), transparent);
+}
+
+.page-title {
+  font-family: var(--font-book);
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  font-weight: var(--title-weight);
+  line-height: 1.05;
+  letter-spacing: var(--title-spacing);
+  text-transform: var(--title-case);
+  text-shadow: var(--title-shadow);
+  color: var(--ink);
+}
+
+/* A softly lit panel. */
+.card {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 16%, transparent);
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--ink) 4%, transparent), transparent 60%),
+    var(--surface);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent) inset, 0 18px 40px -28px var(--bg);
+}
+
+/* Filter buttons. */
+.chip {
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 28%, transparent);
+  border-radius: 999px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-dim);
+  background: transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.chip:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink-dim) 50%, transparent);
+}
+.chip[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 16%, transparent);
+}
+
+/* Small rounded status label. */
+.badge {
+  font-family: var(--font-label);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 22%, transparent);
+}
+.badge-live {
+  color: var(--glow);
+  border-color: color-mix(in srgb, var(--glow) 40%, transparent);
+}
+/* A book the owner flagged as inaccurate (note starts with ⚠). Copper, never red. */
+.badge-flag {
+  color: var(--copper);
+  border-color: color-mix(in srgb, var(--copper) 55%, transparent);
+}
+.badge-live::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--glow);
+  box-shadow: 0 0 8px var(--glow);
+}
+
+/* Long text from notes. */
+.prose-text {
+  max-width: 65ch;
+  font-size: 1.0625rem;
+  line-height: 1.8;
+  color: color-mix(in srgb, var(--ink) 92%, var(--ink-dim));
+}
+
+/* A quotation with a large decorative mark. */
+.quote {
+  position: relative;
+  padding-left: 2.25rem;
+  max-width: 60ch;
+}
+.quote::before {
+  content: "\201C";
+  position: absolute;
+  left: 0;
+  top: -0.6rem;
+  font-family: Georgia, serif; /* Palatino's curly quote looks like two slashes at this size */
+  font-size: 3.5rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--brass) 70%, transparent);
+}
+
+/* ---------- Header ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink-dim) 12%, transparent);
+}
+.nav-link {
+  position: relative;
+  padding: 0.25rem 0;
+  color: var(--ink-dim);
+  transition: color 0.2s ease;
+}
+.nav-link:hover {
+  color: var(--ink);
+}
+.nav-link[aria-current="page"] {
+  color: var(--ink);
+}
+.nav-link[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.2rem;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--brass);
+}
+
+/* ---------- Covers ---------- */
+
+/* Placeholder cover: an engraved frame with the title, in palette colours only. */
+.cover-placeholder {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.1rem 1rem;
+}
+.cover-placeholder::before {
+  content: "";
+  position: absolute;
+  inset: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--brass) 28%, transparent);
+  border-radius: 0.2rem;
+  pointer-events: none;
+}
+.cover-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink) 3%, transparent) 0 2px, transparent 2px 7px);
+  pointer-events: none;
+}
+
+/* Book and game tiles lift on hover or keyboard focus. */
+.tile {
+  transition: transform 0.25s ease;
+}
+.tile .cover-frame {
+  transition: box-shadow 0.25s ease;
+}
+.tile:hover,
+.tile:focus-visible {
+  transform: translateY(-6px);
+}
+.tile:hover .cover-frame,
+.tile:focus-visible .cover-frame {
+  box-shadow: 0 22px 40px -18px color-mix(in srgb, var(--glow) 32%, transparent);
+}
+
+/* ---------- Game moment ---------- */
+
+.moment {
+  position: relative;
+  border-left: 3px solid var(--glow);
+  padding: 1.25rem 1.5rem;
+  border-radius: 0 0.75rem 0.75rem 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--glow) 12%, transparent), transparent 80%),
+    var(--surface);
+}
+
+/* ---------- Habits ---------- */
+
+/* Done = filled muted brass; missed = empty, solid border; unrecorded = empty, dashed. Never red. */
+.habit-grid {
+  display: grid;
+  grid-template-columns: repeat(15, minmax(0, 1fr)); /* phones: two rows of 15 days */
+  gap: 4px;
+}
+@media (min-width: 640px) {
+  .habit-grid {
+    grid-template-columns: repeat(var(--days, 30), minmax(0, 1fr));
+    gap: 3px;
+  }
+}
+.habit-cell {
+  display: block;
+  aspect-ratio: 1;
+  min-width: 0.5rem;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 30%, transparent);
+}
+.habit-strip .habit-cell {
+  width: 0.85rem;
+}
+.habit-done {
+  background: color-mix(in srgb, var(--brass) 70%, var(--surface));
+  border-color: transparent;
+}
+.habit-unrecorded {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ink-dim) 22%, transparent);
+}
+/* Half done: the lower half filled. Showed up: a small dot. Not applicable: a faint slash. */
+.habit-half {
+  border-color: color-mix(in srgb, var(--brass) 55%, transparent);
+  background: linear-gradient(to top, color-mix(in srgb, var(--brass) 70%, var(--surface)) 50%, transparent 50%);
+}
+.habit-partial {
+  border-color: color-mix(in srgb, var(--brass) 45%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--brass) 75%, var(--surface)) 28%, transparent 32%);
+}
+.habit-na {
+  border-color: color-mix(in srgb, var(--ink-dim) 14%, transparent);
+  background: linear-gradient(135deg, transparent 45%, color-mix(in srgb, var(--ink-dim) 35%, transparent) 46% 54%, transparent 55%);
+}
+.habit-today {
+  outline: 1px solid color-mix(in srgb, var(--glow) 60%, transparent);
+  outline-offset: 1px;
+}
+
+/* ---------- 3D books (CSS transforms only) ---------- */
+/* The front sits --t in front of the spine and page edges.
+   Idle: turned to show the spine. Hover/focus: turns the other way to show the page edges. */
+.book3d-scene {
+  perspective: 1200px;
+}
+.book3d {
+  --t: 1.5rem;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateY(20deg);
+  transition: transform 0.35s ease;
+}
+.tile:hover .book3d,
+.tile:focus-visible .book3d {
+  transform: rotateY(-16deg) rotateX(3deg);
+}
+.book3d-front {
+  transform: translateZ(var(--t));
+}
+.book3d-spine,
+.book3d-pages {
+  position: absolute;
+  top: 0;
+  width: var(--t);
+  height: 100%;
+}
+.book3d-spine {
+  left: 0;
+  transform-origin: left center;
+  transform: rotateY(-90deg);
+  border-radius: 2px 0 0 2px;
+  /* Shaded cloth with two gilt bands. */
+  background:
+    linear-gradient(180deg, transparent 10%, color-mix(in srgb, var(--brass) 70%, transparent) 10% 11%, transparent 11% 13%, color-mix(in srgb, var(--brass) 70%, transparent) 13% 14%, transparent 14% 86%, color-mix(in srgb, var(--brass) 70%, transparent) 86% 87%, transparent 87% 89%, color-mix(in srgb, var(--brass) 70%, transparent) 89% 90%, transparent 90%),
+    linear-gradient(90deg, color-mix(in srgb, var(--bg) 35%, var(--spine)), var(--spine) 30%, color-mix(in srgb, var(--bg) 25%, var(--spine)));
+}
+.book3d-pages {
+  right: 0;
+  height: calc(100% - 6px);
+  top: 3px;
+  transform-origin: right center;
+  transform: rotateY(90deg);
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 80%, var(--surface)) 0 1px, color-mix(in srgb, var(--ink) 62%, var(--surface)) 1px 2px);
+}
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .book3d, .tile:hover .book3d, .tile:focus-visible .book3d, .book3d-front { transform: none; transition: none; }
+  .book3d-spine, .book3d-pages { display: none; }
+}
+
+/* ---------- Detail pages ---------- */
+
+/* A soft coloured glow behind the cover, tinted per title (set inline as --tint). */
+.hero-glow {
+  position: absolute;
+  inset: -4rem 0 auto;
+  height: 26rem;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tint, var(--brass)) 22%, transparent), transparent);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Wide image behind the top of a game page, fading into the page background. */
+.backdrop-banner {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: clamp(18rem, 42vw, 30rem);
+  overflow: hidden;
+  pointer-events: none;
+}
+.backdrop-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+  opacity: 0.5;
+}
+.backdrop-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--bg) 35%, transparent), var(--bg) 96%),
+    linear-gradient(90deg, color-mix(in srgb, var(--bg) 60%, transparent), transparent 30%, transparent 70%, color-mix(in srgb, var(--bg) 60%, transparent));
+}
+
+/* ---------- Theme details ---------- */
+
+/* Retro-future: a neon horizon grid fading up from the bottom of the screen. */
+:root:has(main[data-theme="arcade"]) body::before {
+  content: "";
+  position: fixed;
+  will-change: transform;
+  left: -25vw;
+  right: -25vw;
+  bottom: 0;
+  height: 42vh;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--glow) 22%, transparent) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--copper) 26%, transparent) 0 1px, transparent 1px 36px);
+  transform: perspective(320px) rotateX(58deg);
+  transform-origin: bottom center;
+  -webkit-mask-image: linear-gradient(to top, black 10%, transparent 85%);
+  mask-image: linear-gradient(to top, black 10%, transparent 85%);
+  opacity: 0.55;
+}
+:root:has(main[data-theme="arcade"]) .card {
+  border-color: color-mix(in srgb, var(--glow) 25%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--copper) 10%, transparent), 0 18px 40px -26px color-mix(in srgb, var(--glow) 40%, transparent);
+}
+:root:has(main[data-theme="arcade"]) .ornament::after {
+  background: linear-gradient(90deg, var(--copper), color-mix(in srgb, var(--glow) 60%, transparent) 40%, transparent);
+}
+
+/* Minimalist: flat, quiet, no glows or ornaments. */
+:root:has(main[data-theme="minimal"]) .card {
+  background: var(--surface);
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--ink) 12%, transparent);
+}
+:root:has(main[data-theme="minimal"]) .ornament::after {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+:root:has(main[data-theme="minimal"]) .badge-live::before {
+  box-shadow: none;
+}
+:root:has(main[data-theme="minimal"]) .habit-cell {
+  border-color: color-mix(in srgb, var(--ink) 22%, transparent);
+}
+:root:has(main[data-theme="minimal"]) .habit-unrecorded {
+  border-color: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+:root:has(main[data-theme="minimal"]) .habit-done {
+  border-color: transparent;
+}
+:root:has(main[data-theme="minimal"]) .site-header {
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+
+/* Gallery: every card gets a thin gilt inner frame, like a picture on a museum wall. */
+:root:has(main[data-theme="gallery"]) .card::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--brass) 28%, transparent);
+  border-radius: 0.45rem;
+  pointer-events: none;
+}
+
+/* Brass: thin gold linework, a faint hexagon lattice and a teal glow on interaction.
+   "Default theme" = any page without a data-theme (Library, books, 404). */
+:root:not(:has(main[data-theme])) body::before {
+  content: "";
+  position: fixed;
+  will-change: transform;
+  inset: 0 0 auto 0;
+  height: 70vh;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--hex-line);
+  opacity: 0.07;
+  /* A hexagon outline tile (local data URI, no network), faded out towards the bottom. */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='black'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='black'/%3E%3C/svg%3E"), linear-gradient(to bottom, black, transparent);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100' viewBox='0 0 56 100'%3E%3Cpath d='M28 66L0 50L0 16L28 0L56 16L56 50L28 66L28 100' fill='none' stroke='black'/%3E%3Cpath d='M28 0L28 34L0 50L0 84L28 100L56 84L56 50L28 34' fill='none' stroke='black'/%3E%3C/svg%3E"), linear-gradient(to bottom, black, transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+/* A small gold hexagon before every eyebrow label. */
+:root:not(:has(main[data-theme])) .eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.7em;
+  margin-right: 0.7em;
+  background: var(--hex-line);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+/* Cards get two thin gold corner brackets, like an engraved plate. */
+:root:not(:has(main[data-theme])) .card::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  pointer-events: none;
+  opacity: 0.6;
+  background:
+    linear-gradient(var(--hex-line), var(--hex-line)) top left / 14px 1px no-repeat,
+    linear-gradient(var(--hex-line), var(--hex-line)) top left / 1px 14px no-repeat,
+    linear-gradient(var(--hex-line), var(--hex-line)) bottom right / 14px 1px no-repeat,
+    linear-gradient(var(--hex-line), var(--hex-line)) bottom right / 1px 14px no-repeat;
+}
+:root:not(:has(main[data-theme])) .card {
+  border-color: color-mix(in srgb, var(--hex-line) 18%, transparent);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+:root:not(:has(main[data-theme])) .card:hover {
+  border-color: color-mix(in srgb, var(--glow) 45%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--glow) 14%, transparent), 0 18px 40px -26px color-mix(in srgb, var(--glow) 45%, transparent);
+}
+:root:not(:has(main[data-theme])) .chip[aria-pressed="true"] {
+  border-color: var(--hex-line);
+  box-shadow: 0 0 14px -5px var(--glow);
+}
+:root:not(:has(main[data-theme])) .site-header {
+  border-bottom-color: color-mix(in srgb, var(--hex-line) 22%, transparent);
+}
+:root:not(:has(main[data-theme])) .nav-link[aria-current="page"]::after {
+  background: linear-gradient(90deg, var(--hex-line), var(--glow));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--glow) 60%, transparent);
+}
+
+/* Trophy room: each card is a plaque with a gold top edge. */
+:root:has(main[data-theme="trophy"]) .card {
+  border-color: color-mix(in srgb, var(--brass) 22%, transparent);
+  border-top: 2px solid var(--brass);
+  box-shadow: 0 18px 40px -26px var(--brass);
+}
+:root:has(main[data-theme="trophy"]) .ornament::after {
+  background: linear-gradient(90deg, var(--brass), color-mix(in srgb, var(--copper) 40%, transparent) 50%, transparent);
+}
+
+/* Home tiles: opaque charcoal cards. Neutral at rest; the section's accent shows as a coloured
+   label and edge, and glows on hover or focus. */
+.section-tile {
+  --tile-accent: var(--brass);
+  position: relative;
+  display: flex;
+  min-height: 11rem;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-left: 3px solid var(--tile-accent);
+  background: var(--surface);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.section-tile:hover,
+.section-tile:focus-visible {
+  transform: translateY(-5px);
+  border-color: color-mix(in srgb, var(--tile-accent) 60%, transparent);
+  border-left-color: var(--tile-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--tile-accent) 25%, transparent), 0 24px 50px -26px var(--tile-accent);
+}
+.tile-library { --tile-accent: var(--home-library); }
+.tile-games { --tile-accent: var(--home-games); }
+.tile-certificates { --tile-accent: var(--home-certificates); }
+.tile-achievements { --tile-accent: var(--home-achievements); }
+.tile-habits { --tile-accent: var(--home-habits); }
+.tile-balance { --tile-accent: var(--home-balance); }
+
+.section-tile-eyebrow {
+  font-family: var(--font-label);
+  font-size: 0.7rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--tile-accent);
+}
+.section-tile-title {
+  font-family: var(--font-book);
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
+  line-height: 1.1;
+  color: var(--ink);
+}
+.section-tile-arrow {
+  margin-top: auto;
+  align-self: flex-end;
+  color: var(--tile-accent);
+}
+/* Library: a gold hexagon, like the Library page itself. */
+.tile-library .section-tile-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.7em;
+  margin-right: 0.7em;
+  background: var(--tile-accent);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+/* Games: neon uppercase. */
+.tile-games .section-tile-title {
+  font-family: "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--tile-accent) 45%, transparent);
+}
+.tile-games .section-tile-eyebrow {
+  font-family: "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+/* Certificates: a thin gilt inner frame. */
+.tile-certificates::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--tile-accent) 28%, transparent);
+  border-radius: 0.5rem;
+  pointer-events: none;
+}
+/* Achievements: a bright top edge. */
+.tile-achievements {
+  border-top: 2px solid var(--tile-accent);
+}
+/* Habits: quiet, light type. */
+.tile-habits .section-tile-title {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Balance (spider graph) ---------- */
+
+.balance-svg {
+  overflow: visible;
+}
+.balance-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--brass) 26%, transparent);
+  stroke-width: 1;
+}
+.balance-ring:last-of-type {
+  stroke: color-mix(in srgb, var(--brass) 55%, transparent);
+}
+.balance-axis {
+  stroke: color-mix(in srgb, var(--brass) 22%, transparent);
+  stroke-width: 1;
+}
+.balance-shape {
+  fill: color-mix(in srgb, var(--glow) 24%, transparent);
+  stroke: var(--glow);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--brass) 80%, transparent));
+}
+.balance-line {
+  fill: none;
+  stroke: var(--glow);
+  stroke-width: 2;
+}
+.balance-dot {
+  fill: var(--glow);
+  filter: drop-shadow(0 0 6px var(--glow));
+}
+.balance-label {
+  fill: var(--ink);
+  font-family: var(--font-label);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.balance-value {
+  fill: var(--glow);
+  font-size: 12px;
+}
+.balance-faint {
+  opacity: 0.55;
+}
+.balance-note {
+  fill: var(--ink-dim);
+  font-size: 10px;
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+.tile-balance .balance-svg {
+  --brass: var(--home-balance);
+  --glow: #8fe0ff;
+}
+.balance-tile-chart {
+  display: block;
+  width: 8rem;
+  align-self: center;
+}
+@media (min-width: 640px) {
+  .balance-tile-chart {
+    position: absolute;
+    right: 1.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+/* The small bars under each area: what went into its number. */
+.balance-track {
+  height: 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  overflow: hidden;
+}
+.balance-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--glow);
+}
+
+/* A dark status window: thin blue frame, corner brackets, a soft blue glow. */
+:root:has(main[data-theme="dashboard"]) .card {
+  border: 1px solid color-mix(in srgb, var(--brass) 40%, transparent);
+  border-radius: 0.25rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--brass) 8%, transparent), transparent 40%),
+    var(--surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brass) 8%, transparent), 0 0 40px -12px color-mix(in srgb, var(--brass) 40%, transparent);
+}
+:root:has(main[data-theme="dashboard"]) .card::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--glow), var(--glow)) top left / 18px 2px no-repeat,
+    linear-gradient(var(--glow), var(--glow)) top left / 2px 18px no-repeat,
+    linear-gradient(var(--glow), var(--glow)) bottom right / 18px 2px no-repeat,
+    linear-gradient(var(--glow), var(--glow)) bottom right / 2px 18px no-repeat;
+}
+:root:has(main[data-theme="dashboard"]) .ornament::after {
+  background: linear-gradient(90deg, var(--brass), transparent);
+}
+:root:has(main[data-theme="dashboard"]) h2,
+:root:has(main[data-theme="dashboard"]) h3 {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ---------- Habit history: year grid, trends, consistency ---------- */
+
+.year-wrap {
+  overflow-x: auto;
+}
+.year-months,
+.year-grid {
+  display: grid;
+  gap: 3px;
+  min-width: 46rem;
+}
+.year-months {
+  margin-bottom: 4px;
+  font-size: 0.65rem;
+  color: var(--ink-dim);
+}
+.year-grid {
+  grid-template-rows: repeat(7, auto);
+}
+.year-grid .habit-cell {
+  min-width: 0;
+}
+.trend-svg {
+  overflow: visible;
+}
+.trend-grid {
+  stroke: color-mix(in srgb, var(--ink) 10%, transparent);
+  stroke-width: 1;
+}
+.trend-axis {
+  fill: var(--ink-dim);
+  font-size: 11px;
+}
+.trend-line {
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.trend-dot {
+  fill: var(--surface);
+  stroke: var(--brass);
+  stroke-width: 2;
+}
+.trend-bar {
+  fill: color-mix(in srgb, var(--brass) 70%, var(--surface));
+}
+.trend-dot:hover,
+.trend-bar:hover {
+  fill: var(--brass);
+}
+.consistency-wrap {
+  overflow-x: auto;
+}
+.consistency {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 0.7rem;
+}
+.consistency th {
+  padding: 0 0.3rem;
+  font-weight: 400;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+.consistency thead th button {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  padding: 0.2rem 0;
+  color: inherit;
+}
+.consistency thead th button:hover {
+  color: var(--ink);
+}
+.consistency tbody th {
+  text-align: right;
+  color: var(--ink);
+}
+.consistency td {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border-radius: 3px;
+  border: 1px dashed color-mix(in srgb, var(--ink) 10%, transparent);
+}
+.consistency-cell {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--brass) var(--v), var(--surface));
+}
+
+/* ---------- 3D library hall ---------- */
+
+.hub {
+  position: relative;
+  height: clamp(28rem, 62vh, 42rem);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  border-radius: 0.9rem;
+  background: var(--bg);
+}
+.hall,
+.hall-placeholder {
+  height: clamp(34rem, 84vh, 56rem);
+}
+.hall {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--hex-line) 35%, transparent);
+  border-radius: 0.5rem;
+  background: var(--bg);
+}
+.hall-canvas {
+  position: absolute;
+  inset: 0;
+}
+.hall-hint {
+  position: absolute;
+  left: 1rem;
+  top: 1rem;
+  pointer-events: none;
+  font-family: var(--font-label);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.hall-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 5;
+  pointer-events: none;
+  max-width: 16rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--glow) 45%, transparent);
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: 0 0 18px -6px var(--glow);
+}
+.hall-tip strong {
+  display: block;
+  font-family: var(--font-book);
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.hall-tip span {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--ink-dim);
+}
+.hall-shelves {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.hall-shelves .chip {
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+}
+.hall-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  width: min(30rem, 100%);
+  overflow-y: auto;
+  padding: 1.25rem 1.25rem 4rem;
+  border-left: 1px solid color-mix(in srgb, var(--hex-line) 40%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  animation: hall-panel-in 0.3s ease-out;
+}
+/* The panel is narrow, so its book grid shows 3 across. */
+.hall-panel .cert-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.hall-panel .book-grid,
+.hall-panel .poster-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+/* In the arcade the frames glow cyan instead of gold. */
+:root:has(main[data-theme="arcade"]) .hall,
+:root:has(main[data-theme="arcade"]) .hall-panel {
+  border-color: color-mix(in srgb, var(--glow) 40%, transparent);
+}
+@keyframes hall-panel-in {
+  from { opacity: 0; transform: translateX(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---------- Status window (game layer) ---------- */
+
+.status-rank {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border: 2px solid var(--glow);
+  border-radius: 0.5rem;
+  font-family: var(--font-label);
+  font-size: 2.4rem;
+  color: var(--glow);
+  text-shadow: 0 0 18px var(--glow);
+  box-shadow: 0 0 24px -6px var(--glow), inset 0 0 18px -8px var(--glow);
+}
+.status-h {
+  margin-bottom: 0.6rem;
+  font-family: var(--font-label);
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+.status-bar {
+  display: block;
+  height: 0.4rem;
+  min-width: 6rem;
+  flex: 1;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  overflow: hidden;
+}
+.status-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brass), var(--glow));
+  box-shadow: 0 0 8px var(--glow);
+}
+.status-review {
+  border: 1px solid color-mix(in srgb, var(--brass) 25%, transparent);
+  border-radius: 0.35rem;
+  padding: 1rem;
+}
+
+/* ---------- Today ---------- */
+
+.today-input {
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 30%, transparent);
+  border-radius: 0.4rem;
+  background: var(--surface-hi);
+  color: var(--ink);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+}
+textarea.today-input {
+  resize: vertical;
+  line-height: 1.5;
+}
+.mark-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 28%, transparent);
+  color: var(--ink-dim);
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.mark-btn:hover {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--ink-dim) 55%, transparent);
+}
+/* Never red: done is brass, half and showed up are lighter brass, not done is a plain outline. */
+.mark-btn[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+}
+.mark-done[aria-pressed="true"] {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--bg);
+}
+.mark-half[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--brass) 55%, transparent);
+  border-color: var(--brass);
+}
+.mark-partial[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--brass) 25%, transparent);
+  border-color: var(--brass);
+}
+
+/* ---------- Editing (only shown when served by the local LifeOS server) ---------- */
+
+.edit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: -0.5rem 0 1.75rem;
+}
+@media (min-width: 640px) {
+  .edit-tools {
+    margin: -1.5rem 0 2rem;
+  }
+}
+.edit-primary {
+  color: var(--ink);
+  border-color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 18%, transparent);
+}
+.edit-picker,
+.edit-field input,
+.edit-field select,
+.edit-field textarea {
+  width: 100%;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 30%, transparent);
+  border-radius: 0.4rem;
+  background: var(--surface-hi);
+  color: var(--ink);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+}
+.edit-picker {
+  width: auto;
+  max-width: 100%;
+}
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+}
+.edit-field em {
+  font-style: normal;
+  opacity: 0.8;
+}
+.edit-field input[type="checkbox"] {
+  width: 1.25rem;
+}
+.edit-star {
+  position: relative;
+  display: inline-block;
+  border-radius: 999px;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: color-mix(in srgb, var(--ink-dim) 45%, transparent);
+}
+.edit-star.on {
+  color: var(--brass);
+}
+.edit-drawer {
+  margin: 0 0 0 auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  width: min(36rem, 100vw);
+  padding: 0;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  background: var(--surface);
+  color: var(--ink);
+}
+.edit-drawer::backdrop {
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  backdrop-filter: blur(3px);
+}
+.edit-image {
+  width: 7rem;
+  overflow: hidden;
+  border-radius: 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 25%, transparent);
+  background: var(--surface-hi);
+  display: grid;
+  place-items: center;
+  font-size: 0.7rem;
+  color: var(--ink-dim);
+}
+.edit-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.progress-track {
+  display: block;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  overflow: hidden;
+}
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brass);
+}
+
+/* ---------- Motion ---------- */
+
+/* Each page fades in gently. */
+main {
+  animation: page-in 0.4s ease-out both;
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Detail pages: the cover rises out of the dark with a single light sweep. CSS only. */
+.cover-reveal {
+  position: relative;
+  animation: cover-rise 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cover-reveal::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.375rem;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, color-mix(in srgb, var(--ink) 22%, transparent) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: cover-sweep 1.4s 0.5s ease-out both;
+}
+@keyframes cover-rise {
+  from { opacity: 0; transform: perspective(900px) rotateX(10deg) translateY(24px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes cover-sweep {
+  from { background-position: 100% 0; opacity: 1; }
+  to { background-position: -50% 0; opacity: 0; }
+}
+
+/* Certificate viewer. */
+dialog.viewer[open] {
+  animation: viewer-in 0.25s ease-out;
+}
+dialog.viewer::backdrop {
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(4px);
+}
+@keyframes viewer-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile, .tile .cover-frame, .chip, .nav-link { transition: none; }
+  .tile:hover, .tile:focus-visible { transform: none; }
+  .section-tile { transition: none; }
+  .section-tile:hover, .section-tile:focus-visible { transform: none; }
+  main, .cover-reveal, dialog.viewer[open], .hall-panel { animation: none; }
+  .cover-reveal::after { display: none; }
+}
+
+/* ---------- Feel: reactions after an input (see src/lib/feel/motion.ts) ----------
+   Short, springy and in the theme's colours. With "reduce motion", only gentle fades remain. */
+.mark-btn,
+.feel-press {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.mark-btn:active,
+.feel-press:active {
+  transform: scale(0.92);
+}
+.mark-btn {
+  position: relative;
+}
+/* The tapped mark pops and sends out a soft ring. */
+.feel-pop {
+  animation: feel-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.feel-pop::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid var(--brass);
+  animation: feel-ring 0.5s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes feel-pop {
+  0% { transform: scale(0.88); }
+  55% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes feel-ring {
+  from { opacity: 0.7; transform: scale(1); }
+  to { opacity: 0; transform: scale(1.7); }
+}
+/* A row that just got a good mark glows for a moment. */
+.feel-glow {
+  animation: feel-glow 0.9s ease-out;
+}
+@keyframes feel-glow {
+  0% { background: color-mix(in srgb, var(--brass) 16%, transparent); }
+  100% { background: transparent; }
+}
+/* Task text: done tasks are dimmed and struck through (a data attribute, so the class list stays free
+   for the animation below). */
+.task-text {
+  color: var(--ink);
+}
+.task-text[data-done="true"] {
+  color: var(--ink-dim);
+  text-decoration: line-through;
+}
+.task-text.feel-strike {
+  text-decoration: none; /* the drawn line stands in while it animates */
+}
+/* Task done: the text is struck through by a line that draws across. */
+.feel-strike {
+  position: relative;
+}
+.feel-strike::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 52%;
+  height: 1.5px;
+  width: 100%;
+  background: var(--brass);
+  transform-origin: left center;
+  animation: feel-strike 0.35s ease-out both;
+}
+@keyframes feel-strike {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+/* A new item slides in. */
+.feel-enter {
+  animation: feel-enter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes feel-enter {
+  from { opacity: 0; transform: translateY(-6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+/* "Saved ✓" on a button. */
+.feel-saved {
+  animation: feel-pop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* "+20 XP" rising from the control. */
+.feel-float {
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, -100%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--brass);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--brass) 55%, transparent);
+  pointer-events: none;
+  animation: feel-float 1.05s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes feel-float {
+  0% { opacity: 0; transform: translate(-50%, -80%) scale(0.9); }
+  20% { opacity: 1; transform: translate(-50%, -120%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -260%) scale(1); }
+}
+/* Sparks flying out (all habits done, level up). */
+.feel-spark {
+  position: fixed;
+  z-index: 61;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 999px;
+  background: var(--brass);
+  box-shadow: 0 0 8px var(--brass);
+  pointer-events: none;
+  animation: feel-spark 0.8s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+.feel-spark-alt {
+  width: 4px;
+  height: 4px;
+  background: var(--glow);
+  box-shadow: 0 0 8px var(--glow);
+}
+@keyframes feel-spark {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.3); }
+}
+/* The big moment banner. */
+.feel-celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  animation: feel-fade-in 0.25s ease-out;
+  cursor: pointer;
+}
+.feel-celebrate-card {
+  padding: 1.6rem 2.6rem;
+  border-radius: 1rem;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brass) 18%, transparent), 0 0 60px -10px color-mix(in srgb, var(--brass) 60%, transparent);
+  animation: feel-rise 0.55s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.feel-celebrate-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.feel-celebrate-title {
+  margin-top: 0.3rem;
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+  color: var(--brass);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--brass) 50%, transparent);
+}
+.feel-celebrate-out {
+  animation: feel-fade-out 0.3s ease-in forwards;
+}
+@keyframes feel-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes feel-fade-in {
+  from { opacity: 0; }
+}
+@keyframes feel-fade-out {
+  to { opacity: 0; }
+}
+/* The "all done today" note and the streak flame. */
+.feel-badge-in {
+  animation: feel-rise 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .feel-pop, .feel-saved, .feel-celebrate-card, .feel-badge-in { animation: feel-fade-in 0.2s ease-out; }
+  .feel-pop::after, .feel-strike::after { animation: none; }
+  .feel-strike::after { transform: none; }
+  .feel-enter { animation: feel-fade-in 0.2s ease-out; }
+  .feel-float { animation: feel-fade-out 1s ease-out forwards; transform: translate(-50%, -150%); }
+  .mark-btn:active, .feel-press:active { transform: none; }
+}
+
+/* Today's sync state: floats over the corner, so it never shifts the layout. */
+.sync-badge {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  animation: feel-fade-in 0.2s ease-out;
+}
+
+/* ---------- Phones: status bar, bottom tab bar ----------
+   The Android app draws under the system bars and passes their sizes as --safe-area-inset-*
+   (Capacitor); browsers use env(). On the PC these are 0. */
+:root {
+  --inset-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --inset-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --tab-bar-height: 4rem;
+}
+.site-header {
+  padding-top: var(--inset-top);
+}
+.tab-bar,
+.tab-sheet-backdrop {
+  display: none;
+}
+@media (max-width: 639px) {
+  /* The header is just the name on phones and scrolls away; navigation lives at the bottom. */
+  .site-header {
+    position: relative;
+  }
+  body {
+    padding-bottom: calc(var(--tab-bar-height) + var(--inset-bottom));
+  }
+  .tab-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    height: calc(var(--tab-bar-height) + var(--inset-bottom));
+    padding-bottom: var(--inset-bottom);
+    background: var(--bg);
+    border-top: 1px solid color-mix(in srgb, var(--ink-dim) 16%, transparent);
+  }
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-dim);
+    -webkit-tap-highlight-color: transparent;
+    transition: color 0.15s ease, transform 0.12s ease;
+  }
+  .tab:active {
+    transform: scale(0.94);
+  }
+  .tab[aria-current="page"] {
+    color: var(--brass);
+  }
+  .tab-sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: color-mix(in srgb, var(--bg) 60%, transparent);
+    animation: feel-fade-in 0.15s ease-out;
+  }
+  .tab-sheet {
+    position: absolute;
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: calc(var(--tab-bar-height) + var(--inset-bottom) + 0.5rem);
+    display: flex;
+    flex-direction: column;
+    padding: 0.4rem;
+    border-radius: 1rem;
+    background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--ink-dim) 18%, transparent);
+    animation: feel-rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .tab-sheet-link {
+    padding: 0.85rem 1rem;
+    border-radius: 0.7rem;
+    color: var(--ink);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab-sheet-link:active,
+  .tab-sheet-link[aria-current="page"] {
+    background: color-mix(in srgb, var(--brass) 14%, transparent);
+    color: var(--brass);
+  }
+  /* The floating sync badge sits above the tab bar. */
+  .sync-badge {
+    bottom: calc(var(--tab-bar-height) + var(--inset-bottom) + 0.75rem);
+  }
+}
+
+/* Sliders and checkboxes in the theme colour instead of the browser's blue. */
+input[type="range"],
+input[type="checkbox"] {
+  accent-color: var(--brass);
+}
+/* The edit drawer covers the whole phone screen: keep its header and Save row clear of the system bars. */
+.edit-drawer > form > header {
+  padding-top: calc(1rem + var(--inset-top));
+}
+.edit-drawer > form > footer {
+  padding-bottom: calc(1rem + var(--inset-bottom));
+}
+
+/* ---------- Today: habit rows ----------
+   Phones: every habit the same way, name on top and the five marks spread evenly underneath (big
+   thumb targets). Wider screens: one line, marks on the right, never wrapping. */
+.habit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.8rem 0;
+}
+.habit-marks {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.habit-marks .mark-btn {
+  width: 100%;
+  height: 2.6rem;
+  font-size: 1.05rem;
+}
+@media (min-width: 640px) {
+  .habit-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.65rem 0;
+  }
+  .habit-marks {
+    display: flex;
+    gap: 0.25rem;
+  }
+  .habit-marks .mark-btn {
+    width: 2.1rem;
+    height: 2.1rem;
+    font-size: 0.95rem;
+  }
+}
+
+/* Today's date bar: phones get two rows (day picker, then date · XP · set up); wider screens one. */
+.today-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.today-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.today-nav .today-input {
+  flex: 1;
+  min-width: 0;
+}
+.today-nav .chip {
+  min-width: 2.75rem;
+  justify-content: center;
+}
+.today-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+@media (min-width: 640px) {
+  .today-bar {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .today-nav .today-input {
+    flex: none;
+  }
+  .today-meta {
+    flex: 1;
+  }
+}
+
+/* Today's task form: the text always gets its own row (the Tasks card can be narrow), then
+   time · priority · repeat · Add (two per row on phones, one row on wider screens). */
+.task-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+}
+.task-form-text {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .task-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  }
+}
+
+
+/* Phone app: "a new version is ready" above the tab bar. */
+.update-banner {
+  position: fixed;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(var(--tab-bar-height) + var(--inset-bottom) + 0.75rem);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem 0.6rem 1rem;
+  border-radius: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--brass) 45%, transparent);
+  box-shadow: 0 10px 30px -12px var(--bg);
+  animation: feel-rise 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.update-banner > span {
+  flex: 1;
+}
+@media (min-width: 640px) {
+  .update-banner {
+    left: auto;
+    bottom: 1rem;
+    max-width: 26rem;
+  }
+}
+
+/* ---------- Today: day state, mood, missed reasons (Build 7) ---------- */
+.day-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.8rem;
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 16%, transparent);
+}
+.day-state-locked {
+  border-color: color-mix(in srgb, var(--brass) 40%, transparent);
+  color: var(--ink);
+}
+.day-state-unlocked {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--brass) 55%, transparent);
+}
+/* Closed days: inputs stay visible but quiet. */
+.mark-btn:disabled,
+.mood-btn:disabled,
+.reason-chip:disabled,
+.today-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.mark-btn[aria-pressed="true"]:disabled {
+  opacity: 0.85;
+}
+.mood-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+.mood-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.55rem 0.2rem 0.45rem;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 22%, transparent);
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.mood-btn:active {
+  transform: scale(0.94);
+}
+.mood-btn[aria-checked="true"] {
+  border-color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 18%, transparent);
+}
+.mood-label {
+  font-size: 0.68rem;
+  color: var(--ink-dim);
+}
+.mood-btn {
+  position: relative;
+}
+.missed-reasons {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.reason-chip {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 24%, transparent);
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.reason-chip[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--ink-dim);
+  background: color-mix(in srgb, var(--ink-dim) 14%, transparent);
+}
+/* Today: habits grouped under their anchor. */
+.habit-group + .habit-group {
+  margin-top: 0.9rem;
+}
+.habit-group-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--brass);
+  border-bottom: 1px solid color-mix(in srgb, var(--brass) 25%, transparent);
+}
+.habit-group-title span {
+  letter-spacing: 0.04em;
+  color: var(--ink-dim);
+}
+
+/* Library: reading panel (goal, pace, books being read). */
+.reading-panel {
+  display: grid;
+  gap: 1.25rem;
+  margin-bottom: 2rem;
+  padding: 1.1rem 1.25rem;
+}
+@media (min-width: 768px) {
+  .reading-panel {
+    grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.reading-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.reading-now {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.reading-now li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.progress-bar {
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-dim) 18%, transparent);
+  overflow: hidden;
+}
+.progress-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brass);
+}
+
+/* Insights: one card per finding; a thin left accent says whether it is encouraging or worth care. */
+.insight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.15rem;
+  border-left-width: 3px;
+}
+.insight-good {
+  border-left-color: var(--glow);
+}
+.insight-care {
+  border-left-color: var(--copper);
+}
+
+/* Habits: the year in squares (weeks as columns, Monday on top). */
+.year-squares {
+  display: grid;
+  grid-template-rows: repeat(7, 0.7rem);
+  grid-auto-flow: column;
+  grid-auto-columns: 0.7rem;
+  gap: 3px;
+  width: max-content;
+}
+.year-square {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--ink-dim) 8%, transparent);
+}
+.year-square-empty {
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--ink-dim) 22%, transparent);
+}
+.year-square-blank {
+  background: transparent;
+}
+/* Home: on this day. */
+.on-this-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.25rem;
+}
+
+/* Life areas: the monthly challenge (progress bar in the theme's glow, never red). */
+.challenge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--glow) 30%, transparent);
+  background: color-mix(in srgb, var(--glow) 5%, transparent);
+}
+.challenge-hp {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink-dim) 16%, transparent);
+  overflow: hidden;
+}
+.challenge-hp > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--copper), var(--glow));
+  transition: width 0.6s ease;
+}
+
+/* Quick add (Ctrl+K). */
+.quick-add-button {
+  display: none;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 30%, transparent);
+  color: var(--ink-dim);
+  line-height: 1;
+}
+.quick-add-button:hover {
+  color: var(--ink);
+  border-color: var(--brass);
+}
+@media (min-width: 640px) {
+  .quick-add-button {
+    display: grid;
+    place-items: center;
+  }
+}
+.quick-add {
+  margin: 12vh auto auto;
+  width: min(36rem, calc(100vw - 2rem));
+  padding: 0;
+  border-radius: 1rem;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--brass) 35%, transparent);
+  box-shadow: 0 30px 80px -30px var(--bg);
+}
+.quick-add::backdrop {
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+}
+.quick-add-input {
+  width: 100%;
+  padding: 1rem 1.15rem;
+  font-size: 1.05rem;
+  background: transparent;
+  color: var(--ink);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink-dim) 18%, transparent);
+  outline: none;
+}
+.quick-add-list {
+  max-height: 22rem;
+  overflow-y: auto;
+  padding: 0.4rem;
+}
+.quick-add-list button {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.quick-add-list [aria-selected="true"] button {
+  background: color-mix(in srgb, var(--brass) 15%, transparent);
+}
+.quick-add-foot {
+  padding: 0.55rem 1.15rem;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
+  border-top: 1px solid color-mix(in srgb, var(--ink-dim) 12%, transparent);
+}
+
+/* Plan page: a task row is checkbox · text · actions; on phones the actions wrap under the text. */
+.plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+.plan-row > div:first-of-type {
+  flex: 1 1 7rem; /* the text keeps at least this much; the buttons wrap below only when needed */
+}
+@media (max-width: 639px) {
+  .plan-someday {
+    display: none; /* phones: one line per task; the date button still moves it */
+  }
+}
+.plan-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+.plan-date {
+  display: inline-flex;
+  align-items: center;
+}
+/* The 📅 chip holds a real date input stretched over it, so tapping opens the date picker. */
+.plan-date {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.plan-date input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.plan-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: center;
+}
+@media (min-width: 640px) {
+  .plan-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  }
+}
+/* Goal status buttons: ☐ ◐ ☑ ☒, the chosen one outlined in brass (never red). */
+.goal-mark {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 25%, transparent);
+  color: var(--ink-dim);
+  font-size: 0.95rem;
+  line-height: 1;
+}
+.goal-mark:hover {
+  color: var(--ink);
+}
+.goal-mark[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--brass);
+  background: color-mix(in srgb, var(--brass) 16%, transparent);
+}
+.coming-up:hover {
+  border-color: color-mix(in srgb, var(--brass) 40%, transparent);
+}
+
+/* Core habits card: this week as seven small squares (done brass, half lighter, empty outline; never red). */
+.core-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.3rem;
+}
+.core-day {
+  display: grid;
+  place-items: center;
+  height: 1.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--ink-dim) 25%, transparent);
+  color: var(--ink-dim);
+  font-size: 0.65rem;
+}
+.core-day[data-mark="done"] {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--bg);
+}
+.core-day[data-mark="half"] {
+  background: color-mix(in srgb, var(--brass) 45%, transparent);
+  border-color: var(--brass);
+  color: var(--ink);
+}
+.core-day[data-mark="partial"] {
+  border-color: var(--brass);
+}
+.core-day[data-mark="future"] {
+  opacity: 0.4;
+}
+
+/* Today: "is the second calendar's date right?" around the end of a sighted-moon month. */
+.date-ask {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  flex-basis: 100%;
+}
