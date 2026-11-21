@@ -13,6 +13,7 @@ interface Gate {
   fun: { kind: string; label: string; app: string }[];
   watch: string[];
   dual?: string[];
+  night?: { from: string | null; until: string }; // night lock (scripts/lib/settings.mjs)
 }
 
 // "Comics: com.brave.browser" per line <-> { kind: "comics", label: "Comics", app: "com.brave.browser" }
@@ -110,6 +111,25 @@ export function GateSettings() {
       <div className="flex flex-wrap gap-4">
         {check("phone", "Gate on the phone")}
         {check("pc", "Gate on the PC")}
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={Boolean(gate.night?.from)} onChange={(e) => setGate({ ...gate, night: { from: e.target.checked ? "22:30" : null, until: gate.night?.until ?? "05:00" } })} />
+          <span className="text-ink">Night lock</span>
+        </label>
+        {gate.night?.from && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="edit-field">
+              <span>From</span>
+              <input className="today-input w-32" type="time" value={gate.night.from} onChange={(e) => e.target.value && setGate({ ...gate, night: { ...gate.night!, from: e.target.value } })} />
+            </label>
+            <label className="edit-field">
+              <span>Until</span>
+              <input className="today-input w-32" type="time" value={gate.night.until} onChange={(e) => e.target.value && setGate({ ...gate, night: { ...gate.night!, until: e.target.value } })} />
+            </label>
+          </div>
+        )}
+        <p className="text-ink-dim">At night the Gate offers only Sleep, a note for tomorrow, or Urgent (say what, wait a minute, then 15 minutes). No leisure, and leisure timers end when it starts.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="edit-field">

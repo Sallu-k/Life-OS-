@@ -140,9 +140,58 @@ final class GateOverlay {
 
     private void start() {
         handler.removeCallbacksAndMessages(null);
-        if (MODE_TIMEUP.equals(mode)) timeUp();
+        if (GateStore.isNight(ctx)) {
+            if (MODE_TIMEUP.equals(mode)) GateStore.endFun(ctx);
+            night();
+        } else if (MODE_TIMEUP.equals(mode)) timeUp();
         else if (MODE_STILL.equals(mode)) still();
         else dial();
+    }
+
+    // ---------- night lock: sleep comes first ----------
+
+    /** After the night lock starts: no Purpose, no Leisure. Sleep, a note for tomorrow, or Urgent. */
+    private void night() {
+        LinearLayout col = column();
+        col.addView(title("Time to sleep"));
+        col.addView(text("After " + GateStore.nightFrom(ctx) + " sleep comes first.\nTomorrow starts tonight."));
+        col.addView(button("Sleep", () -> turnedBack("back", "Good night.\nSleep well.")));
+        col.addView(button("Note for tomorrow", () -> write(true)));
+        col.addView(button("Urgent", this::urgent));
+        show(col, false);
+    }
+
+    /** Urgent at night: say what (a few words), wait a minute, then 15 minutes without the Gate. */
+    private void urgent() {
+        LinearLayout col = column();
+        col.addView(title("What is urgent?"));
+        col.addView(small("A few words. Then a minute's pause, then 15 minutes."));
+        EditText input = new EditText(ctx);
+        input.setTextColor(ctx.getColor(R.color.widget_ink));
+        input.setHintTextColor(ctx.getColor(R.color.widget_dim));
+        input.setHint("e.g. reply to the class group about tomorrow");
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        col.addView(input);
+        Button go = button("Continue", () -> pause(60, false, () -> {
+            GateStore.allowUrgent(ctx, 15);
+            finishWith("unlock", "urgent", 15);
+        }, "Opening in "));
+        go.setEnabled(false);
+        go.setAlpha(0.4f);
+        input.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void afterTextChanged(android.text.Editable s) {
+                boolean ok = s.toString().trim().length() >= 12; // the reason is never saved: it is for you
+                go.setEnabled(ok);
+                go.setAlpha(ok ? 1f : 0.4f);
+            }
+        });
+        col.addView(go);
+        col.addView(button("Back", this::night));
+        show(col, false);
+        input.requestFocus();
+        input.postDelayed(() -> ((InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE)).showSoftInput(input, 0), 150);
     }
 
     // ---------- step 1: the choices ----------
@@ -429,7 +478,17 @@ final class GateOverlay {
         col.addView(title("For how long?"));
         col.addView(small("When it runs out, the Gate asks again."));
         String key = MODE_APP.equals(mode) && pkg != null ? pkg : kind.optString("kind");
-        for (int m : GateStore.minutes(ctx)) col.addView(button(m + " min", () -> pause(GateStore.funPause(ctx, key), false, () -> {
+        // Leisure ends when the night lock starts: only lengths that fit (or what is left, if at least 5 min).
+        int left = GateStore.minutesToNight(ctx);
+        java.util.List<Integer> fits = new java.util.ArrayList<>();
+        for (int m : GateStore.minutes(ctx)) if (m <= left) fits.add(m);
+        if (fits.isEmpty() && left >= 5) fits.add(left);
+        if (fits.isEmpty()) {
+            night();
+            return;
+        }
+        if (left < 60) col.addView(small("Night lock at " + GateStore.nightFrom(ctx) + ": " + left + " min left."));
+        for (int m : fits) col.addView(button(m + " min", () -> pause(GateStore.funPause(ctx, key), false, () -> {
             GateStore.countFun(ctx, key);
             beginFun(kind, m);
         })));
@@ -459,10 +518,11 @@ final class GateOverlay {
             GateStore.endFun(ctx);
             turnedBack("done", "Good stop.");
         }));
-        col.addView(button("10 more", () -> pause(GateStore.pauseSeconds(ctx, true), true, () -> {
-            GateStore.startFun(ctx, GateStore.prefs(ctx).getString("fun_kind", "fun"), 10, true);
+        int more = Math.min(10, GateStore.minutesToNight(ctx)); // never past the night lock
+        if (more >= 5) col.addView(button(more + " more", () -> pause(GateStore.pauseSeconds(ctx, true), true, () -> {
+            GateStore.startFun(ctx, GateStore.prefs(ctx).getString("fun_kind", "fun"), more, true);
             GateService.scheduleTimeUp();
-            finishWith("more", null, 10);
+            finishWith("more", null, more);
         })));
         show(col, true);
     }
@@ -470,6 +530,10 @@ final class GateOverlay {
     /** A breathing pause before fun (like one sec): it grows with each repeat of the same fun today
      *  (5, 10, 20, 40 s) and for each extension (15 s, then 30 s). Turning back is always one tap. */
     private void pause(int seconds, boolean extension, Runnable then) {
+        pause(seconds, extension, then, extension ? "More fun in " : "Fun in ");
+    }
+
+    private void pause(int seconds, boolean extension, Runnable then, String label) {
         int[] left = { seconds };
         LinearLayout col = column();
         TextView phase = title("Breathe in");
@@ -491,7 +555,7 @@ final class GateOverlay {
                     then.run();
                     return;
                 }
-                count.setText((extension ? "More fun in " : "Fun in ") + left[0] + " s");
+                count.setText(label + left[0] + " s");
                 left[0]--;
                 handler.postDelayed(this, 1000);
             }

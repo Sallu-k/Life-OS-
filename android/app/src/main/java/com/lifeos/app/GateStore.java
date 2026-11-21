@@ -141,6 +141,55 @@ final class GateStore {
 
     // ---------- the fun session and the grace time ----------
 
+    // ---------- night lock (gate.night { from, until }, scripts/lib/settings.mjs) ----------
+
+    private static int minuteOfDay(String hhmm) {
+        try {
+            return Integer.parseInt(hhmm.substring(0, 2)) * 60 + Integer.parseInt(hhmm.substring(3, 5));
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    private static int nowMinute() {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        return cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE);
+    }
+
+    /** When the night lock starts ("22:30"), or null when it is off. */
+    static String nightFrom(Context c) {
+        JSONObject n = info(c).optJSONObject("night");
+        if (n == null) return null; // off until it is set in Settings
+        String from = n.optString("from", "");
+        return minuteOfDay(from) < 0 ? null : from;
+    }
+
+    static boolean isNight(Context c) {
+        String from = nightFrom(c);
+        if (from == null) return false;
+        JSONObject n = info(c).optJSONObject("night");
+        int f = minuteOfDay(from), u = minuteOfDay(n != null ? n.optString("until", "05:00") : "05:00"), now = nowMinute();
+        if (u < 0) u = 5 * 60;
+        return f < u ? now >= f && now < u : now >= f || now < u;
+    }
+
+    /** Minutes until the night lock starts (0 at night; a day's worth when it is off). */
+    static int minutesToNight(Context c) {
+        String from = nightFrom(c);
+        if (from == null) return 24 * 60;
+        if (isNight(c)) return 0;
+        return ((minuteOfDay(from) - nowMinute()) % (24 * 60) + 24 * 60) % (24 * 60);
+    }
+
+    /** An urgent pass at night: the unlock Gate stays away for these minutes (leisure apps still meet it). */
+    static void allowUrgent(Context c, int minutes) {
+        prefs(c).edit().putLong("urgent_until", System.currentTimeMillis() + minutes * 60_000L).apply();
+    }
+
+    static boolean urgentActive(Context c) {
+        return prefs(c).getLong("urgent_until", 0) > System.currentTimeMillis();
+    }
+
     static void passed(Context c) {
         prefs(c).edit().putLong("passed", System.currentTimeMillis()).apply();
     }

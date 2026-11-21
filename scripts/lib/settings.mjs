@@ -78,7 +78,17 @@ function cleanGate(g) {
     fun: fun.length ? fun : DEFAULT_FUN,
     watch: Array.isArray(x.watch) ? x.watch.filter((p) => PKG.test(p)).slice(0, 30) : DEFAULT_WATCH,
     dual: Array.isArray(x.dual) ? x.dual.filter((p) => PKG.test(p)).slice(0, 10) : DEFAULT_DUAL,
+    night: cleanNight(x.night),
   };
+}
+
+// Night lock: from `from` until `until` the Gates (phone and PC) offer only Sleep, a note for tomorrow, or
+// an urgent pass (say what, wait a minute, 15 minutes). No leisure; leisure timers end at `from`.
+// Off by default (`from: null`); turn it on in Settings > The Gate.
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function cleanNight(n) {
+  const x = n && typeof n === "object" ? n : {};
+  return { from: HHMM.test(x.from ?? "") ? x.from : null, until: HHMM.test(x.until ?? "") ? x.until : "05:00" }; // off until you set it
 }
 
 // The look: the accent colour picked on the PC ("#3d7cf4"), or null for the default. The phone app uses

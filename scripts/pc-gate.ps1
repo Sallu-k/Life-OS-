@@ -35,7 +35,8 @@ $left = [char]0x2190
 $dot = [char]0x00B7
 
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
-  funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null }
+  funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null
+  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10 }
 
 # ---------- talking to the server (or queueing when it is away) ----------
 
@@ -74,8 +75,36 @@ function Log-Choice($choice, $kind = $null, $minutes = 0) {
   $e = @{ device = "pc"; choice = $choice; at = (Now-Stamp) }
   if ($kind) { $e.kind = $kind }
   if ($minutes -gt 0) { $e.minutes = $minutes }
-  if ($choice -notin @("more", "done")) { $e.via = $state.mode }
+  if ($choice -notin @("more", "done") -and $state.mode -in @("unlock", "start")) { $e.via = $state.mode }  # the log knows only these
   Send-Queued "gate" $e
+}
+
+# ---------- night lock (gate.night { from, until } in Settings) ----------
+# After "from" there is no leisure and no Purpose: Sleep (lock), Shut down, a note for tomorrow, or Urgent
+# (say what, wait a minute, then 15 minutes). The Gate comes back while the PC is in use, not only on unlock.
+function Get-MinuteOfDay($hhmm) { if ("$hhmm" -match "^(\d\d):(\d\d)$") { return [int]$matches[1] * 60 + [int]$matches[2] } return -1 }
+function Get-NightFrom {
+  $n = $state.info.night
+  if ($null -eq $n) { return $null }  # off until it is set in Settings
+  if ((Get-MinuteOfDay $n.from) -lt 0) { return $null }  # switched off
+  return $n.from
+}
+function Test-Night {
+  $from = Get-NightFrom
+  if (-not $from) { return $false }
+  $f = Get-MinuteOfDay $from
+  $u = Get-MinuteOfDay $(if ($state.info.night) { $state.info.night.until } else { "05:00" })
+  if ($u -lt 0) { $u = 300 }
+  $now = (Get-Date).Hour * 60 + (Get-Date).Minute
+  if ($f -lt $u) { return ($now -ge $f -and $now -lt $u) }
+  return ($now -ge $f -or $now -lt $u)
+}
+function Get-MinutesToNight {
+  $from = Get-NightFrom
+  if (-not $from) { return 1440 }
+  if (Test-Night) { return 0 }
+  $now = (Get-Date).Hour * 60 + (Get-Date).Minute
+  return (((Get-MinuteOfDay $from) - $now) % 1440 + 1440) % 1440
 }
 
 # A fact read on the Gate counts for Knowledge too (spacing brings it back later).
@@ -373,6 +402,7 @@ function Save-Write {
   if (-not $text) { return }
   if ($state.note) { Send-Queued "capture" @{ kind = "inbox"; text = $text } } else { Send-Queued "task" @{ text = $text; date = (Get-Date -Format "yyyy-MM-dd") } }
   Close-Gate $(if ($state.note) { "note" } else { "task" })
+  if ($state.nightNote) { $state.nightNote = $false; rundll32.exe user32.dll,LockWorkStation }  # a note at night, then bed
 }
 
 # Leisure: a fact first (as on the phone). "Continue my book" opens the reader instead; "Leisure anyway"
@@ -446,11 +476,18 @@ function Show-Length($kind) {
   Add-Text "For how long?" 30 $ink $displayBold 4 | Out-Null
   Add-Text "When it runs out, the Gate asks again." 12 $dim $textFace 22 | Out-Null
   $state.funKind = $kind
+  # Leisure ends when the night lock starts: only lengths that fit (or what is left, if at least 5 min).
+  $leftMin = Get-MinutesToNight
+  $fits = @(@($state.info.minutes) | Where-Object { [int]$_ -le $leftMin })
+  if (-not $fits.Count -and $leftMin -ge 5) { $fits = @($leftMin) }
+  if (-not $fits.Count) { Show-Night; return }
+  $state.fits = $fits
+  if ($leftMin -lt 60) { Add-Text "Night lock at $(Get-NightFrom): $leftMin min left." 12 $funTint $textFace 12 | Out-Null }
   $row = Add-Row 0
   $row.AutoSize = $true
   $row.MaximumSize = New-Object Drawing.Size(714, 0)
   $n = 1
-  foreach ($m in $state.info.minutes) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause 5 $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
+  foreach ($m in $fits) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause 5 $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
   Add-Button "Back" { Show-Kinds } $null "Esc" | Out-Null
 }
 
@@ -469,28 +506,71 @@ function Show-TimeUp {
   Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 24 | Out-Null
   $row = Add-Row 80
   Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } -Primary | Out-Null
-  Add-Card $row 343 66 "10 more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind 10 $true } | Out-Null
+  $state.more = [Math]::Min(10, (Get-MinutesToNight))  # never past the night lock
+  if ($state.more -ge 5) { Add-Card $row 343 66 "$($state.more) more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } | Out-Null }
+}
+
+function Show-Night {
+  Clear-Step "night"
+  Add-Text "Time to sleep" 34 $ink $displayBold 6 | Out-Null
+  Add-Text "After $(Get-NightFrom) sleep comes first. Tomorrow starts tonight." 14 $dim $textFace 24 | Out-Null
+  $row = Add-Row 196
+  Add-Card $row 343 182 "Sleep" "Lock the PC and go to bed" "L" $brass { Close-Gate "back"; rundll32.exe user32.dll,LockWorkStation } | Out-Null
+  Add-Card $row 343 182 "Shut down" "In one minute (shutdown /a cancels)" "S" $noteTint { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } | Out-Null
+  $row2 = Add-Row 80
+  Add-Card $row2 343 66 "Note for tomorrow" "Then the PC locks" "N" $noteTint { $state.nightNote = $true; Show-Write $true } | Out-Null
+  Add-Card $row2 343 66 "Urgent" "Say what, wait a minute, 15 min" "U" $taskTint { Show-Urgent } | Out-Null
+}
+
+function Show-Urgent {
+  Clear-Step "urgent"
+  Add-Text "What is urgent?" 30 $ink $displayBold 4 | Out-Null
+  Add-Text "A few words (never saved). Then a minute's pause, then 15 minutes." 12 $dim $textFace 18 | Out-Null
+  $box = New-Object Windows.Forms.TextBox
+  $box.BorderStyle = "None"
+  $box.Font = Get-Font $textFace 16
+  $box.BackColor = $fieldBg
+  $box.ForeColor = $ink
+  $box.Width = 700
+  $box.Margin = New-Object Windows.Forms.Padding(0, 0, 0, 16)
+  $panel.Controls.Add($box)
+  $state.box = $box
+  $row = Add-Row 72
+  $go = Add-Card $row 343 58 "Continue" $null "Enter" $taskTint { Start-Urgent } -Primary
+  $go.Tag.disabled = $true
+  $state.go = $go
+  Add-Card $row 343 58 "Back" $null "Esc" $null { Show-Night } | Out-Null
+  $box.add_TextChanged({ $state.go.Tag.disabled = $state.box.Text.Trim().Length -lt 12; $state.go.Invalidate() })
+  $box.add_KeyDown({ if ($_.KeyCode -eq "Enter") { $_.SuppressKeyPress = $true; if (-not $state.go.Tag.disabled) { Start-Urgent } } })
+  $box.Focus() | Out-Null
+}
+
+function Start-Urgent {
+  Start-Pause 60 "urgent" 15 $false "Opening in" { $state.urgentUntil = (Get-Date).AddMinutes(15); Close-Gate "unlock" "urgent" 15 }
 }
 
 # A breath before leisure starts (5 s), longer for each extension (15 s, then 30 s): a circle that grows
 # as you breathe in and shrinks as you breathe out (4 s each way).
 $pauseTimer = New-Object Windows.Forms.Timer
 $pauseTimer.Interval = 1000
-$pause = @{ left = 0; kind = ""; minutes = 0; extension = $false; label = $null; started = Get-Date; ring = $null }
+$pause = @{ left = 0; kind = ""; minutes = 0; extension = $false; label = $null; started = Get-Date; ring = $null; text = "Leisure in"; then = $null }
 $pauseTimer.add_Tick({
   $pause.left--
-  if ($pause.left -le 0) { $pauseTimer.Stop(); Start-Fun $pause.kind $pause.minutes $pause.extension; return }
-  $pause.label.Text = "Leisure in $($pause.left) s"
+  if ($pause.left -le 0) { $pauseTimer.Stop(); if ($pause.then) { & $pause.then } else { Start-Fun $pause.kind $pause.minutes $pause.extension }; return }
+  $pause.label.Text = "$($pause.text) $($pause.left) s"
 })
 $breathTimer = New-Object Windows.Forms.Timer
 $breathTimer.Interval = 33
 $breathTimer.add_Tick({ if ($pause.ring) { $pause.ring.Invalidate() } })
-function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension) {
+# $text and $then: an urgent pass at night uses the same breath ("Opening in", then the pass).
+function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension, $text = "Leisure in", [scriptblock]$then = $null) {
   Clear-Step "pause"
   $pause.left = $seconds
   $pause.kind = $kind
   $pause.minutes = $minutes
   $pause.extension = $extension
+  $pause.text = $text
+  $pause.then = $then
   $pause.started = Get-Date
   $ring = New-Object Windows.Forms.Panel
   $ring.Size = New-Object Drawing.Size(700, 260)
@@ -514,8 +594,8 @@ function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension) {
   })
   $panel.Controls.Add($ring)
   $pause.ring = $ring
-  $pause.label = Add-Text "Leisure in $seconds s" 14 $dim $textFace 20
-  Add-Button "Never mind" { $pauseTimer.Stop(); if ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } else { Show-Dial } } $null "Esc" | Out-Null
+  $pause.label = Add-Text "$text $seconds s" 14 $dim $textFace 20
+  Add-Button "Never mind" { $pauseTimer.Stop(); if ($pause.then) { Show-Night } elseif ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } else { Show-Dial } } $null "Esc" | Out-Null
   $pauseTimer.Start()
   $breathTimer.Start()
 }
@@ -531,7 +611,9 @@ function Show-Gate($mode) {
   if ($state.info.accent) { $script:brass = [Drawing.ColorTranslator]::FromHtml($state.info.accent) }  # the accent picked in Settings
   $state.mode = $mode
   $state.answered = $false
-  if ($mode -eq "timeup") { Show-TimeUp } else { Show-Dial }
+  $state.nightNote = $false
+  if (Test-Night) { if ($mode -eq "timeup") { $state.funUntil = [datetime]::MinValue }; Show-Night }
+  elseif ($mode -eq "timeup") { Show-TimeUp } else { Show-Dial }
   $form.Opacity = 0
   $form.Show()
   $form.Activate()
@@ -557,11 +639,16 @@ $form.add_KeyDown({
     }
     "kinds" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.fun).Count) { Show-Length @($state.info.fun)[$n].kind } }
     "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.minutes).Count) { Start-Pause 5 $state.funKind ([int]@($state.info.minutes)[$n]) $false } }
-    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } elseif ($key -eq "M") { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind 10 $true } }
+    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
+    "night" {
+      switch ($key) { "L" { Close-Gate "back"; rundll32.exe user32.dll,LockWorkStation } "S" { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } "N" { $state.nightNote = $true; Show-Write $true } "U" { Show-Urgent } }
+      return
+    }
   }
-  if ($key -eq "Escape" -and $state.step -notin @("dial", "timeup")) {
+  if ($key -eq "Escape" -and $state.step -notin @("dial", "timeup", "night")) {
     $pauseTimer.Stop()
-    if ($state.step -eq "pause" -and $state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" }
+    if ($state.step -eq "urgent" -or ($state.step -eq "pause" -and $pause.then) -or ($state.step -eq "write" -and $state.nightNote)) { $state.nightNote = $false; Show-Night }
+    elseif ($state.step -eq "pause" -and $state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" }
     elseif ($state.step -eq "length") { Show-Kinds }
     else { Show-Dial }
   }
@@ -603,6 +690,18 @@ if ($Shot) {
   Start-Pause 5 "videos" 10 $false; $pause.started = (Get-Date).AddSeconds(-4); & $snap "5-breathe"; $pauseTimer.Stop()
   Show-Write $true; & $snap "6-note"
   $state.funMinutes = 20; $state.funKind = "videos"; Show-TimeUp; & $snap "7-timeup"
+  # The night lock, as if it started 12 minutes from now, then as if it had started.
+  $hhmm = { param($d) $d.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture) }
+  $state.info | Add-Member -Force night ([pscustomobject]@{ from = (& $hhmm (Get-Date).AddMinutes(12)); until = (& $hhmm (Get-Date).AddHours(6)) })
+  Show-Length "videos"; & $snap "8-length-before-night"
+  Show-TimeUp; & $snap "9-timeup-before-night"
+  $state.info.night.from = (& $hhmm (Get-Date).AddMinutes(-5))
+  if (-not (Test-Night)) { throw "night lock: should be on" }
+  if ((Get-MinutesToNight) -ne 0) { throw "night lock: no minutes should be left" }
+  Show-Night; & $snap "10-night"
+  Show-Urgent; & $snap "11-urgent"
+  $state.info.night.from = $null
+  if (Test-Night) { throw "night lock: should be off" }
   $form.Hide()
   exit 0
 }
@@ -624,6 +723,9 @@ $watch.add_Tick({
     if ($now.Second -eq 0) { $form.Invalidate() }  # the clock
     return
   }
+  # Night lock: while the PC is in use after the start time, the night Gate comes back (an urgent pass
+  # keeps it away for 15 minutes). Leisure timers were cut to end at the start time.
+  if (-not $locked -and (Test-Night) -and $state.urgentUntil -lt $now -and ($now - $state.passed).TotalSeconds -ge 20) { Show-Gate "unlock"; return }
   $funOn = $state.funUntil -gt $now
   if ($state.funUntil -ne [datetime]::MinValue -and -not $funOn) {
     $state.funUntil = [datetime]::MinValue

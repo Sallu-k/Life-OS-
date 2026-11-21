@@ -197,6 +197,7 @@ public class GateService extends Service {
 
     private void onUnlock() {
         if (!GateStore.phoneOn(this) || GateStore.inGrace(this) || GateStore.funActive(this) || busy()) return;
+        if (GateStore.isNight(this) && GateStore.urgentActive(this)) return; // an urgent pass at night
         show(GateOverlay.MODE_UNLOCK, null);
     }
 
