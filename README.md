@@ -50,6 +50,8 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
   that grows each time you start the same fun again that day, then a session that runs out and asks
   again. Opening a watched app (e.g. a video app) without choosing Fun brings it back. Every choice is
   logged (choice and minutes only, never text) and shows up in Insights ("you turned back 36% of the time").
+- **Your one thing**: the Gate shows your most important open task (priority first, then overdue or with a
+  deadline, then by time) with **Done** to tick it there; the next one takes its place.
 - Apps for both work and fun (default: Brave): Purpose lets them through for 10 minutes, then the Gate asks
   "Still for the task?".
 

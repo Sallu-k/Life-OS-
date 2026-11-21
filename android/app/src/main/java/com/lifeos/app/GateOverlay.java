@@ -152,6 +152,8 @@ final class GateOverlay {
         col.addView(title(MODE_APP.equals(mode) ? "Opening a leisure app" : "Why now?"));
         String context = contextLine();
         if (context != null) col.addView(text(context));
+        JSONObject one = oneThing();
+        if (one != null) oneThingRow(col, one);
         JSONObject today = GateStore.info(ctx).optJSONObject("today");
         if (today != null) col.addView(small("Today: " + today.optInt("gates") + " unlocks, " + today.optInt("fun") + " for fun"));
         // Note and Task: two buttons side by side; the slider below stays where the thumb is.
@@ -169,7 +171,7 @@ final class GateOverlay {
         row.addView(task);
         col.addView(row);
         boolean dual = MODE_APP.equals(mode) && pkg != null && GateStore.dual(ctx, pkg);
-        col.addView(small(dual ? "Right for a task (10 min), left for Leisure" : "Slide right for Purpose, left for Leisure"));
+        col.addView(small(dual ? "Right for a task (10 min), left for Leisure" : one != null ? "Slide right to do it, left for Leisure" : "Slide right for Purpose, left for Leisure"));
         // The dial fills the rest of the screen; its circle sits over the fingerprint sensor (GateDial).
         GateDial d = new GateDial(ctx, this::picked);
         col.addView(d, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -182,11 +184,40 @@ final class GateOverlay {
         String anchor = GateStore.nextAnchor(ctx);
         if (anchor != null) return anchor;
         JSONObject info = GateStore.info(ctx);
+        if (oneThing() != null) return null; // the task has its own row
         String task = info.optString("nextTask", "");
         if (!task.isEmpty()) return "Next: " + task;
         JSONObject book = info.optJSONObject("book");
         if (book != null && book.optInt("pages", 0) > 0) return (book.optInt("pages") - book.optInt("progress")) + " pages left in " + book.optString("title");
         return null;
+    }
+
+    /** Your one thing: the most important open task (the server ranks them: priority, overdue, time). */
+    private JSONObject oneThing() {
+        JSONArray top = GateStore.info(ctx).optJSONArray("topTasks");
+        return top != null && top.length() > 0 ? top.optJSONObject(0) : null;
+    }
+
+    /** "Your one thing · why", then the task with Done beside it (Done ticks it and shows the next one). */
+    private void oneThingRow(LinearLayout col, JSONObject t) {
+        String why = t.optBoolean("overdue") ? "overdue" : t.optBoolean("deadline") ? "has a deadline"
+            : "high".equals(t.optString("priority")) ? "high priority" : !t.optString("time").isEmpty() && !"null".equals(t.optString("time")) ? "at " + t.optString("time") : "today";
+        col.addView(small("Your one thing · " + why));
+        LinearLayout row = new LinearLayout(ctx);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView task = text(t.optString("text"));
+        task.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        task.setMaxLines(2);
+        task.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        task.setPadding(0, 0, dp(10), 0);
+        row.addView(task, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        Button done = button("Done", () -> {
+            GateStore.taskDone(ctx, t);
+            dial(); // the next one takes its place
+        });
+        row.addView(done, new LinearLayout.LayoutParams(dp(96), dp(48)));
+        col.addView(row);
     }
 
     private void picked(int choice) {

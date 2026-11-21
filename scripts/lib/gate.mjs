@@ -107,13 +107,15 @@ export function gateInfo(today) {
   } catch {
     book = null;
   }
+  const tasks = topTasksOf(today);
   return {
     ...settings.gate,
     accent: settings.theme.accent,
     book,
     bank: getRewards(today).bank,
-    // The next open task today (its text is shown on the phone's Gate only, never stored in the log).
-    nextTask: nextTaskOf(today),
+    // The most important open tasks (their text is shown on the Gates only, never stored in the log).
+    topTasks: tasks,
+    nextTask: asLine(tasks[0]), // older phone apps read this line
     // What the Gate shows before leisure (cached on the phone, so it works offline): a few cards and the
     // next passage of the current long read.
     knowledge: knowledgeOf(today),
@@ -129,15 +131,23 @@ export function gateBetween(from, to) {
   return countGate(readGate(months).filter((e) => e.date >= from && e.date <= to));
 }
 
-function nextTaskOf(today) {
+// The most important open tasks, best first: today's plus the unfinished ones carried from the last two
+// weeks. Higher priority first, then overdue or with a deadline, then the earliest time. The Gate shows
+// the first as "your one thing" and can tick it (POST /api/task/done); the next one then takes its place.
+const RANK = { high: 0, medium: 1, low: 3 };
+export function topTasksOf(today, n = 3) {
   try {
-    const open = getDay(today).tasks.filter((t) => !t.done);
-    open.sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
-    return open[0] ? `${open[0].time ? `${open[0].time} ` : ""}${open[0].text}`.slice(0, 80) : null;
+    const day = getDay(today);
+    const open = [...day.tasks, ...day.carried]
+      .filter((t) => !t.done && !(t.start && t.start > today))
+      .map((t) => ({ text: t.text, date: t.date, time: t.time ?? null, priority: t.priority ?? null, deadline: Boolean(t.deadline), overdue: t.date < today }));
+    open.sort((a, b) => (RANK[a.priority] ?? 2) - (RANK[b.priority] ?? 2) || Number(b.overdue || b.deadline) - Number(a.overdue || a.deadline) || (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+    return open.slice(0, n);
   } catch {
-    return null;
+    return [];
   }
 }
+const asLine = (t) => (t ? `${t.time ? `${t.time} ` : ""}${t.text}`.slice(0, 80) : null);
 
 function knowledgeOf(today) {
   try {

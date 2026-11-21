@@ -316,6 +316,13 @@ async function api(req, res, parts) {
       return json(res, 200, day);
     }
   }
+  // Ticked on a Gate (phone or PC): found by its text, as queued changes are (POST: the Gates' queues only post).
+  if (name === "task" && slug === "done" && method === "POST") {
+    const body = await readBody(req);
+    editTask(body.date, findTask(body.date, { matchText: String(body.matchText ?? "") }), { done: true });
+    scheduleQuietBuild();
+    return json(res, 200, { ok: true });
+  }
   if (name === "task" && method === "POST") {
     const body = await readBody(req);
     const date = body.date ?? localToday();

@@ -266,6 +266,24 @@ final class GateStore {
         }
     }
 
+    /** Ticks your one thing (POST /api/task/done, found by its text) and drops it from the cached list,
+     *  so the Gate shows the next one at once. Sent with the Gate's own queue. */
+    static synchronized void taskDone(Context c, JSONObject t) {
+        try {
+            enqueue(c, "task/done", new JSONObject().put("date", t.optString("date")).put("matchText", t.optString("text")));
+            JSONObject info = info(c);
+            JSONArray top = info.optJSONArray("topTasks");
+            JSONArray rest = new JSONArray();
+            for (int i = 1; top != null && i < top.length(); i++) rest.put(top.get(i));
+            info.put("topTasks", rest);
+            info.put("nextTask", rest.length() > 0 ? rest.getJSONObject(0).optString("text") : "");
+            prefs(c).edit().putString("info", info.toString()).apply();
+        } catch (Exception ignored) {
+            // not ticked: it stays on the Gate
+        }
+        syncLater(c);
+    }
+
     private static synchronized void enqueue(Context c, String path, JSONObject body) throws Exception {
         JSONArray q = new JSONArray(prefs(c).getString("queue", "[]"));
         q.put(new JSONObject().put("path", path).put("body", body));
