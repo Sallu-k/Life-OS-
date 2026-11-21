@@ -13,7 +13,7 @@ interface Gate {
   fun: { kind: string; label: string; app: string }[];
   watch: string[];
   dual?: string[];
-  night?: { from: string | null; until: string }; // night lock (scripts/lib/settings.mjs)
+  night?: { from: string | null; until: string; grey?: number }; // night lock (scripts/lib/settings.mjs)
 }
 
 // "Comics: com.brave.browser" per line <-> { kind: "comics", label: "Comics", app: "com.brave.browser" }
@@ -126,6 +126,10 @@ export function GateSettings() {
             <label className="edit-field">
               <span>Until</span>
               <input className="today-input w-32" type="time" value={gate.night.until} onChange={(e) => e.target.value && setGate({ ...gate, night: { ...gate.night!, until: e.target.value } })} />
+            </label>
+            <label className="edit-field">
+              <span>Grey PC screen, minutes before (0 = off)</span>
+              <input className="today-input w-28" type="number" min={0} max={180} value={gate.night.grey ?? 30} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, grey: Math.max(0, Number(e.target.value) || 0) } })} />
             </label>
           </div>
         )}

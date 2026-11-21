@@ -8,6 +8,7 @@ import { backup, getDay } from "./days.mjs";
 import { getSection, setSection } from "./notes.mjs";
 import { gateBetween } from "./gate.mjs";
 import { knowledgeBetween } from "./knowledge.mjs";
+import { pcBetween } from "./pclog.mjs";
 import { vaultRoot } from "./vault-write.mjs";
 
 const SCORE = { done: 1, half: 0.5, partial: 0.25, missed: 0 };
@@ -79,6 +80,8 @@ function weekStats(days) {
     gate: { ...gateBetween(days[0], days[6]), urgentBefore: gateBetween(shift(days[0], -7), shift(days[6], -7)).unlock },
     // Knowledge: cards read or recalled and passages read this week (counts only).
     knowledge: knowledgeBetween(days[0], days[6]),
+    // PC time per app (StayFree, Logs/PC): hours, the top apps, minutes a night after the night lock.
+    pc: pcBetween(days[0], days[6]),
   };
 }
 

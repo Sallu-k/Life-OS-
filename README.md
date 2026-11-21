@@ -56,6 +56,11 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
 - **YouTube on the PC**: YouTube in Brave counts as leisure. Opening it without a leisure timer brings the Gate
   (Purpose gives a 10-minute pass, then "Still for the task?"); at the night lock the tab closes. Games are
   never stopped mid-way: the night Gate waits until a game ends. Window titles are read in memory only.
+- **Grey screen** (with the night lock): Windows' greyscale filter comes on 30 minutes before (you choose how
+  long) and goes off when the night ends.
+- **PC time by app** (optional, if you use [StayFree](https://stayfreeapps.com) on Windows): the server reads
+  a copy of its data every hour into `Logs/PC/` (app names and minutes only); Insights and the weekly review
+  show where PC time goes, how late it runs, and sleep after late nights.
 - **Your one thing**: the Gate shows your most important open task (priority first, then overdue or with a
   deadline, then by time) with **Done** to tick it there; the next one takes its place.
 - Apps for both work and fun (default: Brave): Purpose lets them through for 10 minutes, then the Gate asks

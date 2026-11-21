@@ -36,7 +36,8 @@ $dot = [char]0x00B7
 
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
   funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null
-  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10; ytPass = [datetime]::MinValue; warned = $null }
+  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10; ytPass = [datetime]::MinValue; warned = $null
+  funDay = ""; funCounts = @{}; fits = @(); revealed = $false; greyByUs = $false; greyAt = [datetime]::MinValue }
 
 # ---------- talking to the server (or queueing when it is away) ----------
 
@@ -149,6 +150,44 @@ function Test-GameRunning {
 
 function Close-YouTubeTab { if (Test-YouTube (Get-Front)) { [Windows.Forms.SendKeys]::SendWait("^w") } }  # only when YouTube is in front
 
+# Grey screen before the night lock: Windows' own colour filter (Settings > Accessibility > Color filters,
+# greyscale), switched with its shortcut Win+Ctrl+C from gate.night.grey minutes before the night lock until
+# it ends. Switched back to colour only if LifeOS switched it on (a filter you chose yourself stays).
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class LifeOSKeys {
+  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  public static void WinCtrlC() {
+    keybd_event(0x5B, 0, 0, UIntPtr.Zero); keybd_event(0x11, 0, 0, UIntPtr.Zero); keybd_event(0x43, 0, 0, UIntPtr.Zero);
+    keybd_event(0x43, 0, 2, UIntPtr.Zero); keybd_event(0x11, 0, 2, UIntPtr.Zero); keybd_event(0x5B, 0, 2, UIntPtr.Zero);
+  }
+}
+'@
+$colorFilter = "HKCU:\Software\Microsoft\ColorFiltering"
+function Test-GreyOn { return ((Get-ItemProperty $colorFilter -ErrorAction SilentlyContinue).Active -eq 1) }
+function Switch-Grey {
+  New-Item -Path $colorFilter -Force -ErrorAction SilentlyContinue | Out-Null
+  Set-ItemProperty $colorFilter -Name FilterType -Value 0 -Type DWord  # 0 = greyscale
+  Set-ItemProperty $colorFilter -Name HotkeyEnabled -Value 1 -Type DWord
+  [LifeOSKeys]::WinCtrlC()
+}
+function Test-GreyTime {
+  $n = $state.info.night
+  $from = Get-NightFrom
+  if (-not $from -or -not $n -or -not $n.grey) { return $false }
+  return ((Test-Night) -or (Get-MinutesToNight) -le [int]$n.grey)
+}
+function Update-Grey {
+  if (((Get-Date) - $state.greyAt).TotalSeconds -lt 30) { return }  # looked at every 30 s: switching back is allowed, briefly
+  $state.greyAt = Get-Date
+  $want = Test-GreyTime
+  $on = Test-GreyOn
+  if ($want -and -not $on) { Switch-Grey; $state.greyByUs = $true }
+  elseif (-not $want -and $on -and $state.greyByUs) { Switch-Grey; $state.greyByUs = $false }
+}
+
+
 # A Windows notification (10 minutes before the night lock).
 $tray = New-Object Windows.Forms.NotifyIcon
 $tray.Icon = [Drawing.SystemIcons]::Information
@@ -157,7 +196,7 @@ function Show-Warning($title, $text) { $tray.Visible = $true; $tray.ShowBalloonT
 
 # A fact read on the Gate counts for Knowledge too (spacing brings it back later).
 function Log-Fact {
-  if ($state.fact -and $state.fact.id) { Send-Queued "knowledge/log" @{ events = @(@{ kind = "read"; id = $state.fact.id; at = (Now-Stamp) }) } }
+  if ($state.fact -and $state.fact.id -and $state.fact.type -ne "recall") { Send-Queued "knowledge/log" @{ events = @(@{ kind = "read"; id = $state.fact.id; at = (Now-Stamp) }) } }
   $state.fact = $null
 }
 
@@ -357,6 +396,22 @@ function Clear-Step($step) {
   $panel.ResumeLayout()
 }
 
+# Chose not to (turned back, stopped, sleep, read instead): a short warm moment, then the Gate goes.
+$momentTimer = New-Object Windows.Forms.Timer
+$momentTimer.Interval = 1400
+$moment = @{ then = $null }
+$momentTimer.add_Tick({ $momentTimer.Stop(); $form.Hide(); if ($moment.then) { & $moment.then } })
+function Show-Moment($choice, $message, [scriptblock]$then = $null) {
+  if ($state.answered) { return }
+  $state.answered = $true
+  $state.passed = Get-Date
+  Log-Choice $choice
+  Clear-Step "moment"
+  Add-Text $message 30 $brass $displayBold 0 | Out-Null
+  $moment.then = $then
+  $momentTimer.Start()
+}
+
 function Close-Gate($choice, $kind = $null, $minutes = 0) {
   $state.answered = $true
   $state.passed = Get-Date
@@ -422,7 +477,7 @@ function Show-Still {
   Add-Text "10 minutes of YouTube are up." 14 $dim $textFace 24 | Out-Null
   $row = Add-Row 80
   Add-Card $row 224 66 "Yes, 10 more" $null "Y" $brass { Select-Purpose } | Out-Null
-  Add-Card $row 224 66 "Task done" $null "D" $noteTint { Close-YouTube "done" } -Primary | Out-Null
+  Add-Card $row 224 66 "Task done" $null "D" $noteTint { Show-Moment "done" "Good work." { $afterTimer.Start() } } -Primary | Out-Null
   Add-Card $row 224 66 "Leisure now" $null "L" $funTint { Show-ReadFirst } | Out-Null
 }
 
@@ -500,18 +555,41 @@ function Start-Hold($card, [int]$seconds) {
   $holdTimer.Start()
 }
 
+function Read-Paper { Log-Fact; Show-Moment "read" "Enjoy the book.`nThose minutes are yours again." { rundll32.exe user32.dll,LockWorkStation } }
+
+# A recall question (as on the phone): the question first, the answer on request, then how it went.
+function Send-Recall($kind) {
+  if ($state.fact -and $state.fact.id) { Send-Queued "knowledge/log" @{ events = @(@{ kind = $kind; id = $state.fact.id; at = (Now-Stamp) }) } }
+  $state.recalled = $kind
+  $state.fact = $null  # logged: Log-Fact has nothing more to send
+  Show-ReadFirst
+}
+
 function Show-ReadFirst {
   $k = $state.info.knowledge
   $fact = if ($k -and $k.items) { @($k.items)[0] } else { $null }
   $book = if ($k) { $k.passage } else { $null }
   if (-not $fact -and -not $book -and -not $state.info.book) { Show-Kinds; return }
+  $again = $state.step -eq "read"  # redrawn after Show answer / Knew it: keep the state
   Clear-Step "read"
-  $state.fact = $fact
+  if (-not $again) { $state.fact = $fact; $state.revealed = $false; $state.recalled = $null }
   if ($fact) {
-    Add-Text "A fact first" 12 $dim $textFace 4 | Out-Null
-    if ($fact.type -eq "recall" -and $fact.q) {
+    $recall = $fact.type -eq "recall" -and $fact.q
+    Add-Text $(if ($recall) { "Do you remember?" } else { "A fact first" }) 12 $dim $textFace 4 | Out-Null
+    if ($recall) {
       Add-Text $fact.q 26 $ink $displayBold 10 | Out-Null
-      Add-Text $fact.a 16 $ink $textFace 10 | Out-Null
+      if (-not $state.revealed) {
+        Add-Button "Show answer" { $state.revealed = $true; Show-ReadFirst } $null "A" $null $noteTint | Out-Null
+      } else {
+        Add-Text $fact.a 16 $ink $textFace 10 | Out-Null
+        if ($state.recalled) {
+          Add-Text $(if ($state.recalled -eq "knew") { "Good. It comes back in a while." } else { "It comes back sooner, until it sticks." }) 12 $noteTint $textFace 12 | Out-Null
+        } else {
+          $row = Add-Row 72
+          Add-Card $row 343 58 "Knew it" $null "K" $noteTint { Send-Recall "knew" } | Out-Null
+          Add-Card $row 343 58 "Not yet" $null "X" $taskTint { Send-Recall "notyet" } | Out-Null
+        }
+      }
     } else {
       Add-Text $fact.title 26 $ink $displayBold 10 | Out-Null
       Add-Text $fact.text 16 $ink $textFace 10 | Out-Null
@@ -525,10 +603,10 @@ function Show-ReadFirst {
     Add-Button "Continue my book" { Log-Fact; Close-Gate "read"; Start-Process "$site/read/" } $null "B" $where $brass -Primary | Out-Null
   }
   if ($state.info.book) {
-    Add-Button "Read 10 pages of $($state.info.book.title)" { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation } $null "P" "A paper book: the PC locks while you read" $noteTint | Out-Null
+    Add-Button "Read 10 pages of $($state.info.book.title)" { Read-Paper } $null "P" "A paper book: the PC locks while you read" $noteTint | Out-Null
   }
   $anyway = Add-Button "Leisure anyway" { Log-Fact; Show-LeisureKinds } $null $left $null $funTint
-  if ($fact) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]($fact.text.Length / 60) * 2 + 2))) }
+  if ($fact -and -not $again) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]("$($fact.text)$($fact.q)".Length / 60) * 2 + 2))) }
   Add-Text "Esc goes back" 10.5 $dim $textFace 0 | Out-Null
 }
 
@@ -562,11 +640,23 @@ function Show-Length($kind) {
   $row.AutoSize = $true
   $row.MaximumSize = New-Object Drawing.Size(714, 0)
   $n = 1
-  foreach ($m in $fits) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause 5 $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
+  $wait = Get-FunPause $kind
+  if ($wait -gt 5) { Add-Text "Leisure again today: a $wait s breath first." 12 $dim $textFace 12 | Out-Null }
+  foreach ($m in $fits) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause (Get-FunPause $state.funKind) $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
   Add-Button "Back" { Show-Kinds } $null "Esc" | Out-Null
 }
 
+# The pause before leisure grows each time the same kind is started again today: 5 s, then 10, 20, 40 s.
+function Get-FunPause($kind) {
+  $day = (Get-Date).ToString("yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
+  if ($state.funDay -ne $day) { $state.funDay = $day; $state.funCounts = @{} }
+  $n = [int]$state.funCounts[$kind]
+  return [Math]::Min(40, 5 * [Math]::Pow(2, [Math]::Min(3, $n)))
+}
+function Add-FunCount($kind) { $state.funCounts[$kind] = [int]$state.funCounts[$kind] + 1 }
+
 function Start-Fun($kind, [int]$minutes, [bool]$extension) {
+  if (-not $extension) { Add-FunCount $kind }
   $state.funKind = $kind
   $state.funUntil = (Get-Date).AddMinutes($minutes)
   $state.funMinutes = if ($extension) { $state.funMinutes + $minutes } else { $minutes }
@@ -580,7 +670,7 @@ function Show-TimeUp {
   Add-Text "Time's up" 34 $ink $displayBold 6 | Out-Null
   Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 24 | Out-Null
   $row = Add-Row 80
-  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Close-YouTube "done" } -Primary | Out-Null
+  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } } -Primary | Out-Null
   $state.more = [Math]::Min(10, (Get-MinutesToNight))  # never past the night lock
   if ($state.more -ge 5) { Add-Card $row 343 66 "$($state.more) more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } | Out-Null }
 }
@@ -590,7 +680,7 @@ function Show-Night {
   Add-Text "Time to sleep" 34 $ink $displayBold 6 | Out-Null
   Add-Text "After $(Get-NightFrom) sleep comes first. Tomorrow starts tonight." 14 $dim $textFace 24 | Out-Null
   $row = Add-Row 196
-  Add-Card $row 343 182 "Sleep" "Lock the PC and go to bed" "L" $brass { Close-Gate "back"; rundll32.exe user32.dll,LockWorkStation } | Out-Null
+  Add-Card $row 343 182 "Sleep" "Lock the PC and go to bed" "L" $brass { Show-Moment "back" "Good night.`nSleep well." { rundll32.exe user32.dll,LockWorkStation } } | Out-Null
   Add-Card $row 343 182 "Shut down" "In one minute (shutdown /a cancels)" "S" $noteTint { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } | Out-Null
   $row2 = Add-Row 80
   Add-Card $row2 343 66 "Note for tomorrow" "Then the PC locks" "N" $noteTint { $state.nightNote = $true; Show-Write $true } | Out-Null
@@ -637,6 +727,15 @@ $pauseTimer.add_Tick({
 $breathTimer = New-Object Windows.Forms.Timer
 $breathTimer.Interval = 33
 $breathTimer.add_Tick({ if ($pause.ring) { $pause.ring.Invalidate() } })
+# Turning back from the breath: at night back to the night screen; after time's up a good stop; else a
+# turned-back moment (the YouTube tab closes too).
+function Stop-Pause {
+  $pauseTimer.Stop()
+  if ($pause.then) { Show-Night }
+  elseif ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } }
+  else { Show-Moment "back" "You turned back.`nThat time stays yours." { $afterTimer.Start() } }
+}
+
 # $text and $then: an urgent pass at night uses the same breath ("Opening in", then the pass).
 function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension, $text = "Leisure in", [scriptblock]$then = $null) {
   Clear-Step "pause"
@@ -670,7 +769,7 @@ function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension, $tex
   $panel.Controls.Add($ring)
   $pause.ring = $ring
   $pause.label = Add-Text "$text $seconds s" 14 $dim $textFace 20
-  Add-Button "Never mind" { $pauseTimer.Stop(); if ($pause.then) { Show-Night } elseif ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } else { Show-Dial } } $null "Esc" | Out-Null
+  Add-Button "Never mind" { Stop-Pause } $null "Esc" | Out-Null
   $pauseTimer.Start()
   $breathTimer.Start()
 }
@@ -708,29 +807,33 @@ $form.add_KeyDown({
   switch ($state.step) {
     "dial" {
       if ($key -eq "D" -and @($state.info.topTasks)[0]) { Complete-Task; return }
-      if ($key -eq "Escape" -and $state.mode -eq "app") { Close-YouTube; return }
+      if ($key -eq "Escape" -and $state.mode -eq "app") { Show-Moment "back" "You turned back.`nThat time stays yours." { $afterTimer.Start() }; return }
       switch ($key) { { $_ -in "Right", "Return", "D1", "NumPad1" } { Select-Purpose } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
       return
     }
     "read" {
       $book = $state.info.knowledge.passage
       if ($key -eq "B" -and $book) { Log-Fact; Close-Gate "read"; Start-Process "$site/read/" }
-      elseif ($key -eq "P" -and $state.info.book) { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation }
+      elseif ($key -eq "P" -and $state.info.book) { Read-Paper }
       elseif ($key -eq "Left" -and -not $holdTimer.Enabled) { Log-Fact; Show-LeisureKinds }
+      elseif ($key -eq "A" -and -not $state.revealed) { $state.revealed = $true; Show-ReadFirst }
+      elseif ($key -eq "K" -and $state.revealed -and -not $state.recalled) { Send-Recall "knew" }
+      elseif ($key -eq "X" -and $state.revealed -and -not $state.recalled) { Send-Recall "notyet" }
     }
     "kinds" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.fun).Count) { Show-Length @($state.info.fun)[$n].kind } }
-    "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.minutes).Count) { Start-Pause 5 $state.funKind ([int]@($state.info.minutes)[$n]) $false } }
-    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-YouTube "done" } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
-    "still" { switch ($key) { "Y" { Select-Purpose } "D" { Close-YouTube "done" } "L" { Show-ReadFirst } }; return }
+    "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.fits).Count) { Start-Pause (Get-FunPause $state.funKind) $state.funKind ([int]@($state.fits)[$n]) $false } }
+    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
+    "still" { switch ($key) { "Y" { Select-Purpose } "D" { Show-Moment "done" "Good work." { $afterTimer.Start() } } "L" { Show-ReadFirst } }; return }
     "night" {
-      switch ($key) { "L" { Close-Gate "back"; rundll32.exe user32.dll,LockWorkStation } "S" { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } "N" { $state.nightNote = $true; Show-Write $true } "U" { Show-Urgent } }
+      switch ($key) { "L" { Show-Moment "back" "Good night.`nSleep well." { rundll32.exe user32.dll,LockWorkStation } } "S" { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } "N" { $state.nightNote = $true; Show-Write $true } "U" { Show-Urgent } }
       return
     }
   }
   if ($key -eq "Escape" -and $state.step -notin @("dial", "timeup", "night")) {
     $pauseTimer.Stop()
-    if ($state.step -eq "urgent" -or ($state.step -eq "pause" -and $pause.then) -or ($state.step -eq "write" -and $state.nightNote)) { $state.nightNote = $false; Show-Night }
-    elseif ($state.step -eq "pause" -and $state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" }
+    if ($state.step -eq "pause") { Stop-Pause }
+    elseif ($state.step -eq "moment") { }
+    elseif ($state.step -eq "urgent" -or ($state.step -eq "write" -and $state.nightNote)) { $state.nightNote = $false; Show-Night }
     elseif ($state.step -eq "length") { Show-Kinds }
     else { Show-Dial }
   }
@@ -767,6 +870,13 @@ if ($Shot) {
   }
   Show-Dial; & $snap "1-dial"
   $state.mode = "app"; Show-Dial; & $snap "1b-youtube"; Show-Still; & $snap "1c-still"; $state.mode = "unlock"
+  # A recall question (a made-up card, pictures only).
+  $card = [pscustomobject]@{ type = "recall"; id = "test/recall"; title = "Ohm"; q = "What does Ohm's law say?"; a = "Voltage equals current times resistance (V = I R)."; text = "V = I R"; source = "Physics" }
+  $state.info | Add-Member -Force knowledge ([pscustomobject]@{ items = @($card); passage = $null })
+  $state.step = "dial"; Show-ReadFirst; & $snap "2b-recall"
+  $state.revealed = $true; Show-ReadFirst; & $snap "2c-recall-answer"
+  $state.answered = $false; Show-Moment "back" "You turned back.`nThat time stays yours."; $momentTimer.Stop(); & $snap "12-moment"
+  $state.answered = $true
   Show-ReadFirst; & $snap "2-read-first"
   Show-Kinds; & $snap "3-kinds"
   Show-Length "videos"; & $snap "4-length"
@@ -807,6 +917,7 @@ $watch.add_Tick({
     return
   }
   $front = $(if ($locked) { @{ name = ""; title = "" } } else { Get-Front })
+  if (-not $locked -and $state.info) { Update-Grey }
   # 10 minutes before the night lock: a warning, once, if YouTube is open.
   $toNight = Get-MinutesToNight
   if (-not $locked -and $toNight -gt 0 -and $toNight -le 10 -and $state.warned -ne $now.Date) {

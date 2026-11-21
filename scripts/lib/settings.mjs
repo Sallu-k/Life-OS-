@@ -88,7 +88,12 @@ function cleanGate(g) {
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 function cleanNight(n) {
   const x = n && typeof n === "object" ? n : {};
-  return { from: HHMM.test(x.from ?? "") ? x.from : null, until: HHMM.test(x.until ?? "") ? x.until : "05:00" }; // off until you set it
+  const grey = Number(x.grey); // minutes of grey screen on the PC before the night lock (0 = off)
+  return {
+    from: HHMM.test(x.from ?? "") ? x.from : null, // off until you set it
+    until: HHMM.test(x.until ?? "") ? x.until : "05:00",
+    grey: Number.isInteger(grey) && grey >= 0 && grey <= 180 ? grey : 30,
+  };
 }
 
 // The look: the accent colour picked on the PC ("#3d7cf4"), or null for the default. The phone app uses

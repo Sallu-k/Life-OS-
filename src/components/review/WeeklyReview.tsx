@@ -27,6 +27,7 @@ interface Review {
     strongest: string | null;
     needsCare: string | null;
     knowledge?: { cards: number; knew: number; notyet: number; passages: number };
+    pc?: { days: number; hours: number; top: { app: string; hours: number }[]; lateMin: number } | null; // StayFree (scripts/lib/pclog.mjs)
     gate?: { gates: number; unlock: number; fun: number; read: number; more: number; funMinutes: number; urgentBefore: number };
   };
   wins: string;
@@ -124,6 +125,11 @@ export function WeeklyReview() {
             <p className="text-sm text-ink-dim">
               Knowledge: <span className="text-ink">{s.knowledge.cards}</span> cards, {s.knowledge.passages} passages read
               {s.knowledge.knew + s.knowledge.notyet > 0 && `, recalled ${s.knowledge.knew} of ${s.knowledge.knew + s.knowledge.notyet}`}.
+            </p>
+          )}
+          {s.pc && (
+            <p className="text-sm text-ink-dim">
+              PC: <span className="text-ink">{s.pc.hours} h</span> over {s.pc.days} days ({s.pc.top.map((t) => `${t.app} ${t.hours} h`).join(", ")}), {s.pc.lateMin} min a night after the night lock.
             </p>
           )}
           {(s.strongest || s.needsCare) && (

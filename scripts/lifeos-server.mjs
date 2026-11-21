@@ -29,6 +29,7 @@ import { siteManifest, zipFiles } from "./lib/appBundle.mjs";
 import { signManifest } from "./lib/updateKey.mjs";
 import { loadEnvLocal, vaultRoot } from "./lib/vault-write.mjs";
 import { offlinePack } from "./lib/offlinePack.mjs";
+import { pcLogStarted, writePcLog } from "./lib/pclog.mjs";
 
 loadEnvLocal();
 if (!process.env.LIFEOS_TOKEN) {
@@ -530,4 +531,19 @@ if (!process.env.LIFEOS_NO_REBUILD) {
   startBackups();
   setTimeout(closeFinishedDays, 90_000);
   setInterval(closeFinishedDays, 3600_000);
+  // PC time per app from StayFree into Logs/PC (the first run fills the history, later runs the last days).
+  const pcLog = () => {
+    const from = pcLogStarted() ? localDateDaysAgo(3) : "2024-01-01";
+    writePcLog(from)
+      .then((written) => written?.length && scheduleQuietBuild())
+      .catch((e) => console.error("pc log:", e.message));
+  };
+  setTimeout(pcLog, 120_000);
+  setInterval(pcLog, 3600_000);
+}
+
+function localDateDaysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
