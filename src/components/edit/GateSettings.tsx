@@ -137,7 +137,7 @@ export function GateSettings() {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="edit-field">
-          <span>No Gate again within (minutes)</span>
+          <span>Phone: no Gate again within (minutes)</span>
           <input className="today-input w-28" type="number" min={0} max={30} value={gate.grace} onChange={(e) => setGate({ ...gate, grace: Number(e.target.value) || 0 })} />
         </label>
         <label className="edit-field">

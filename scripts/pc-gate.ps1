@@ -358,7 +358,7 @@ function Add-Card($parent, [int]$w, [int]$h, $title, $hint, $key, $tint, [script
     if ($t.key) {
       $kf = Get-Font $textFace 11 "Bold"
       $ksz = $g.MeasureString($t.key, $kf)
-      $kw = [Math]::Max(32, $ksz.Width + 14)
+      $kw = [Math]::Max(32.0, $ksz.Width + 14)
       $kx = $s.Width - $kw - 18
       $ky = $(if ($big) { 20 } else { ($s.Height - 30) / 2 })
       $pill = New-RoundPath (New-Object Drawing.RectangleF($kx, $ky, $kw, 30)) 9
@@ -782,7 +782,8 @@ $afterTimer.add_Tick({ $afterTimer.Stop(); Close-YouTubeTab })
 # Fades in, like the phone's Gate.
 $fadeTimer = New-Object Windows.Forms.Timer
 $fadeTimer.Interval = 15
-$fadeTimer.add_Tick({ if ($form.Opacity -ge 0.99) { $form.Opacity = 1; $fadeTimer.Stop() } else { $form.Opacity = [Math]::Min(1, $form.Opacity + 0.08) } })
+# 1.0, not 1: with a whole number PowerShell picks Math.Min(int, int) and 0.08 becomes 0 (the Gate stayed invisible).
+$fadeTimer.add_Tick({ if ($form.Opacity -ge 0.99) { $form.Opacity = 1.0; $fadeTimer.Stop() } else { $form.Opacity = [Math]::Min(1.0, $form.Opacity + 0.08) } })
 
 function Show-Gate($mode) {
   $state.info = Get-Info
@@ -914,6 +915,8 @@ $watch.add_Tick({
   if ($unlocked -and $form.Visible) { $form.Activate() }  # prepared while locked: take the keyboard now
   if ($form.Visible) {
     if ($now.Second -eq 0) { $form.Invalidate() }  # the clock
+    # Safety: shown but see-through with no fade running would block every later Gate unseen. Show it fully.
+    if ($form.Opacity -lt 0.95 -and -not $fadeTimer.Enabled) { $form.Opacity = 1.0 }
     return
   }
   $front = $(if ($locked) { @{ name = ""; title = "" } } else { Get-Front })
@@ -943,10 +946,8 @@ $watch.add_Tick({
     if (-not $locked -and -not $unlocked -and -not $slept) { Show-Gate "timeup"; return }  # ran out while you were here
   }
   # The Gate is made ready behind the lock screen, so it is already there the moment you unlock.
-  if (($locked -or $unlocked -or $slept) -and -not $funOn) {
-    $grace = [double]$(if ($state.info) { $state.info.grace } else { 2 })
-    if (($now - $state.passed).TotalMinutes -ge $grace) { Show-Gate "unlock" }
-  }
+  # No grace time on the PC: every lock and unlock meets the Gate, even a quick Win+L.
+  if (($locked -or $unlocked -or $slept) -and -not $funOn) { Show-Gate "unlock" }
 })
 $watch.Start()
 
