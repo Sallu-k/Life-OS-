@@ -219,14 +219,22 @@ public class GateService extends Service {
         if (GateStore.funUntil(this) == 0) return; // stopped already
         PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
         // Screen off when time ran out: the next unlock shows the normal Gate instead.
-        if (power != null && power.isInteractive()) show(GateOverlay.MODE_TIMEUP, null);
+        if (power != null && power.isInteractive() && !locked()) show(GateOverlay.MODE_TIMEUP, null);
         else GateStore.endFun(this);
+    }
+
+    /** The lock screen is up. The Gate never goes under it: it would sit between the lock screen and the
+     *  wallpaper and show as a black lock screen. */
+    private boolean locked() {
+        android.app.KeyguardManager kg = (android.app.KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+        return kg != null && kg.isKeyguardLocked();
     }
 
     /** Draws the Gate on top of everything ("Display over other apps"): OnePlus blocks opening a screen from
      *  the background, but not this. */
     private void show(String mode, String pkg) {
         if (!Settings.canDrawOverlays(this)) return;
+        if (locked()) return;
         if (overlay == null) overlay = new GateOverlay(this);
         overlay.show(mode, pkg);
     }

@@ -114,11 +114,16 @@ final class GateOverlay {
             GateStore.syncLater(ctx);
             answered = true;
         }
-        close();
+        close(false);
     }
 
-    /** Fades away (160 ms) instead of vanishing; the screen-off case closes at once. */
     private void close() {
+        close(true);
+    }
+
+    /** Fades away (160 ms) instead of vanishing; the screen-off case closes at once (with the screen off the
+     *  fade never runs, and a Gate left behind hides the lock screen wallpaper as a black screen). */
+    private void close(boolean fade) {
         handler.removeCallbacksAndMessages(null);
         if (root == null) return;
         View gone = root;
@@ -131,7 +136,8 @@ final class GateOverlay {
             }
         };
         gone.animate().cancel();
-        gone.animate().alpha(0f).scaleX(0.98f).scaleY(0.98f).setDuration(160).withEndAction(remove).start();
+        if (fade) gone.animate().alpha(0f).scaleX(0.98f).scaleY(0.98f).setDuration(160).withEndAction(remove).start();
+        else remove.run();
     }
 
     private String via() {
