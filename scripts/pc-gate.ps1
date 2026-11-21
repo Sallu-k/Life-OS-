@@ -302,8 +302,18 @@ function Get-Context {
 function Show-Dial {
   Clear-Step "dial"
   Add-Text "Why now?" 34 $ink $displayBold 6 | Out-Null
-  $ctx = Get-Context
-  Add-Text $(if ($ctx) { $ctx } else { "Pick one. It takes a second." }) 13 $dim $textFace 26 | Out-Null
+  $one = @($state.info.topTasks)[0]
+  if ($one) {
+    # Your one thing: the most important open task. Click it (or Enter) to do it now; Done (D) ticks it.
+    $why = if ($one.overdue) { "overdue" } elseif ($one.deadline) { "has a deadline" } elseif ($one.priority -eq "high") { "high priority" } elseif ($one.time) { "at $($one.time)" } else { "today" }
+    Add-Text "Your one thing $dot $why" 12 $dim $textFace 8 | Out-Null
+    $row = Add-Row 86
+    Add-Card $row 560 72 $one.text "Do it now: straight in, no timer" "Enter" $taskTint { Close-Gate "unlock" } | Out-Null
+    Add-Card $row 126 72 "Done" $null "D" $noteTint { Complete-Task } -Primary | Out-Null
+  } else {
+    $ctx = Get-Context
+    Add-Text $(if ($ctx) { $ctx } else { "Pick one. It takes a second." }) 13 $dim $textFace 26 | Out-Null
+  }
   # The phone's slider, side by side: Leisure on the left, Purpose on the right.
   $top = Add-Row 196
   Add-Card $top 343 182 "Leisure" "A fact first, then a timer" "$left" $funTint { Show-ReadFirst } | Out-Null
@@ -313,6 +323,15 @@ function Show-Dial {
   Add-Card $bottom 343 66 "Task" "Add it to today, then go" "T" $taskTint { Show-Write $false } | Out-Null
   $t = $state.info.today
   if ($t) { Add-Text "Today $dot $($t.gates) unlocks $dot $($t.unlock) for purpose $dot $($t.fun) for leisure" 11 $dim $textFace 0 | Out-Null }
+}
+
+# Ticks your one thing (sent now, or queued while the server is away) and shows the next one.
+function Complete-Task {
+  $one = @($state.info.topTasks)[0]
+  if (-not $one) { return }
+  Send-Queued "task/done" @{ date = $one.date; matchText = $one.text }
+  $state.info.topTasks = @(@($state.info.topTasks) | Select-Object -Skip 1)
+  Show-Dial
 }
 
 function Show-Write([bool]$note) {
@@ -526,7 +545,8 @@ $form.add_KeyDown({
   $key = $_.KeyCode
   switch ($state.step) {
     "dial" {
-      switch ($key) { { $_ -in "Right", "D1", "NumPad1" } { Close-Gate "unlock" } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
+      if ($key -eq "D" -and @($state.info.topTasks)[0]) { Complete-Task; return }
+      switch ($key) { { $_ -in "Right", "Return", "D1", "NumPad1" } { Close-Gate "unlock" } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
       return
     }
     "read" {
