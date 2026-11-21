@@ -14,6 +14,7 @@ interface Gate {
   watch: string[];
   dual?: string[];
   night?: { from: string | null; until: string; grey?: number }; // night lock (scripts/lib/settings.mjs)
+  cap?: number; // leisure minutes a day with no waiting on the Gates
 }
 
 // "Comics: com.brave.browser" per line <-> { kind: "comics", label: "Comics", app: "com.brave.browser" }
@@ -78,7 +79,7 @@ export function GateSettings() {
     <div className="card flex flex-col gap-4 p-5 text-sm">
       <h2 className="font-serif text-xl text-ink">The Gate</h2>
       <p className="text-ink-dim">
-        After every unlock, choose why: Unlock (urgent, one slide), Fun (your book is offered first; the session runs out and asks again), Note or Task. Each choice is logged, never the text.
+        After every unlock, choose why: Unlock (urgent, one slide), Fun (one thing to learn first; the session runs out and asks again, each "more" a little longer), Note or Task. No waiting until the day&rsquo;s leisure passes the limit below; after it, the breathing pauses come back. Each choice is logged, never the text.
       </p>
       {app && status && (
         <div className="flex flex-col gap-2">
@@ -127,10 +128,16 @@ export function GateSettings() {
               <span>Until</span>
               <input className="today-input w-32" type="time" value={gate.night.until} onChange={(e) => e.target.value && setGate({ ...gate, night: { ...gate.night!, until: e.target.value } })} />
             </label>
-            <label className="edit-field">
-              <span>Grey PC screen, minutes before (0 = off)</span>
-              <input className="today-input w-28" type="number" min={0} max={180} value={gate.night.grey ?? 30} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, grey: Math.max(0, Number(e.target.value) || 0) } })} />
+            <label className="flex items-center gap-2 sm:col-span-2">
+              <input type="checkbox" checked={(gate.night.grey ?? 30) > 0} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, grey: e.target.checked ? 30 : 0 } })} />
+              <span className="text-ink">Grey PC screen before the night lock</span>
             </label>
+            {(gate.night.grey ?? 30) > 0 && (
+              <label className="edit-field">
+                <span>Grey PC screen, minutes before</span>
+                <input className="today-input w-28" type="number" min={1} max={180} value={gate.night.grey ?? 30} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, grey: Math.max(1, Number(e.target.value) || 1) } })} />
+              </label>
+            )}
           </div>
         )}
         <p className="text-ink-dim">At night the Gate offers only Sleep, a note for tomorrow, or Urgent (say what, wait a minute, then 15 minutes). No leisure, and leisure timers end when it starts.</p>
@@ -139,6 +146,10 @@ export function GateSettings() {
         <label className="edit-field">
           <span>Phone: no Gate again within (minutes)</span>
           <input className="today-input w-28" type="number" min={0} max={30} value={gate.grace} onChange={(e) => setGate({ ...gate, grace: Number(e.target.value) || 0 })} />
+        </label>
+        <label className="edit-field">
+          <span>Leisure a day with no waiting (minutes, phone and PC together)</span>
+          <input className="today-input w-28" type="number" min={30} max={720} step={15} value={gate.cap ?? 180} onChange={(e) => setGate({ ...gate, cap: Number(e.target.value) || 180 })} />
         </label>
         <label className="edit-field">
           <span>Fun lengths (minutes)</span>

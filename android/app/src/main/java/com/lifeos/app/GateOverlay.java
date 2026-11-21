@@ -31,7 +31,8 @@ import org.json.JSONObject;
  * this. It appears at once after an unlock, and Home cannot skip it (Unlock is always one slide away).
  * Purpose is one slide with no questions. Leisure first asks you to read a little (a card, a recall
  * question or the next passage of your long read), then offers your book, then asks what kind and for how
- * long; the session runs out and asks again. Note and Task save straight to the PC (queued when it is
+ * long; the session runs out and asks again, with one more thing to learn and a longer "more" each time.
+ * No waiting until the day's leisure passes gate.cap (3 h); then the growing breaths return. Note and Task save straight to the PC (queued when it is
  * away). The screen going off while it is open logs "skip". Every choice is logged (choice and numbers only).
  */
 final class GateOverlay {
@@ -405,8 +406,9 @@ final class GateOverlay {
         return sv;
     }
 
-    /** Keeps "Done" dim and off for about 3 seconds a line (60 characters), at most 30 seconds. */
+    /** Past the leisure cap: keeps "Done" dim and off for about 3 seconds a line (60 characters), at most 30 s. */
     private void holdUntilRead(Button done, String s) {
+        if (!GateStore.overCap(ctx)) return; // under the cap the fact is a gift, not a wait
         int seconds = Math.min(30, Math.max(3, 3 * (s.length() / 60 + 1)));
         done.setEnabled(false);
         done.animate().cancel(); // the step's entrance would fade it up to full
@@ -494,6 +496,7 @@ final class GateOverlay {
             return;
         }
         if (left < 60) col.addView(small("Night lock at " + GateStore.nightFrom(ctx) + ": " + left + " min left."));
+        if (GateStore.overCap(ctx)) col.addView(small("Over " + hours(GateStore.cap(ctx)) + " of leisure today: a breath first again."));
         for (int m : fits) col.addView(button(m + " min", () -> pause(GateStore.funPause(ctx, key), false, () -> {
             GateStore.countFun(ctx, key);
             beginFun(kind, m);
@@ -520,12 +523,24 @@ final class GateOverlay {
         int minutes = GateStore.prefs(ctx).getInt("fun_minutes", 0);
         col.addView(title("Time's up"));
         col.addView(text(minutes + " min of " + GateStore.prefs(ctx).getString("fun_kind", "fun") + "."));
+        // One thing to learn while you choose ; no waiting before the cap.
+        JSONObject bit = GateStore.nextReading(ctx, true);
+        if (bit != null) {
+            col.addView(small(bit.optString("title")));
+            col.addView(reading(bit.optString("text")), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        }
+        Runnable seen = () -> {
+            if (bit != null) GateStore.readDone(ctx, "read", bit.optString("id"), false);
+        };
+        if (GateStore.overCap(ctx)) col.addView(small("Over " + hours(GateStore.cap(ctx)) + " of leisure today: the pauses are back."));
         col.addView(button("Done", () -> {
+            seen.run();
             GateStore.endFun(ctx);
             turnedBack("done", "Good stop.");
         }));
-        int more = Math.min(10, GateStore.minutesToNight(ctx)); // never past the night lock
+        int more = Math.min(GateStore.moreMinutes(ctx), GateStore.minutesToNight(ctx)); // never past the night lock
         if (more >= 5) col.addView(button(more + " more", () -> pause(GateStore.pauseSeconds(ctx, true), true, () -> {
+            seen.run();
             GateStore.startFun(ctx, GateStore.prefs(ctx).getString("fun_kind", "fun"), more, true);
             GateService.scheduleTimeUp();
             finishWith("more", null, more);
@@ -533,13 +548,22 @@ final class GateOverlay {
         show(col, true);
     }
 
-    /** A breathing pause before fun (like one sec): it grows with each repeat of the same fun today
+    /** 180 -> "3 h", 150 -> "2 h 30 min". */
+    private static String hours(int minutes) {
+        return minutes / 60 + " h" + (minutes % 60 > 0 ? " " + minutes % 60 + " min" : "");
+    }
+
+    /** Past the leisure cap, a breathing pause before fun (like one sec): it grows with each repeat of the same fun today
      *  (5, 10, 20, 40 s) and for each extension (15 s, then 30 s). Turning back is always one tap. */
     private void pause(int seconds, boolean extension, Runnable then) {
         pause(seconds, extension, then, extension ? "More fun in " : "Fun in ");
     }
 
     private void pause(int seconds, boolean extension, Runnable then, String label) {
+        if (seconds <= 0) { // under the day's leisure cap: no waiting
+            then.run();
+            return;
+        }
         int[] left = { seconds };
         LinearLayout col = column();
         TextView phase = title("Breathe in");

@@ -205,7 +205,39 @@ final class GateStore {
             .putString("fun_kind", kind)
             .putInt("fun_minutes", extension ? p.getInt("fun_minutes", 0) + minutes : minutes)
             .putInt("fun_ext", extension ? p.getInt("fun_ext", 0) + 1 : 0)
+            .putInt("fun_today", localLeisure(c) + minutes)
+            .putString("fun_today_day", WidgetStore.today())
             .apply();
+    }
+
+    // ---------- the leisure cap: no waiting until a day's leisure passes gate.cap (default 3 h) ----------
+
+    private static int localLeisure(Context c) {
+        return WidgetStore.today().equals(prefs(c).getString("fun_today_day", "")) ? prefs(c).getInt("fun_today", 0) : 0;
+    }
+
+    /** Leisure minutes started today: this phone's own count, or the PC's (phone + PC) when it knows more. */
+    static int leisureToday(Context c) {
+        JSONObject info = info(c);
+        JSONObject today = info.optJSONObject("today");
+        int both = today != null && WidgetStore.today().equals(info.optString("date")) ? today.optInt("funMinutes", 0) : 0;
+        return Math.max(localLeisure(c), both);
+    }
+
+    static int cap(Context c) {
+        return info(c).optInt("cap", 180);
+    }
+
+    static boolean overCap(Context c) {
+        return leisureToday(c) >= cap(c);
+    }
+
+    /** Each "more" at time's up is longer than the last (a better reward, not a longer wait): 10, 15, 20,
+     *  then 30 min. Past the cap it stays 10. */
+    static int moreMinutes(Context c) {
+        if (overCap(c)) return 10;
+        int[] steps = { 10, 15, 20, 30 };
+        return steps[Math.min(3, prefs(c).getInt("fun_ext", 0))];
     }
 
     static void endFun(Context c) {
@@ -220,15 +252,17 @@ final class GateStore {
         return funUntil(c) > System.currentTimeMillis();
     }
 
-    /** Seconds to wait before more fun: 5 to start, then 15, then 30 for every later extension. */
+    /** Seconds to wait before more fun: none until the cap; then 5 to start, 15, then 30 per extension. */
     static int pauseSeconds(Context c, boolean extension) {
+        if (!overCap(c)) return 0;
         if (!extension) return 5;
         return prefs(c).getInt("fun_ext", 0) == 0 ? 15 : 30;
     }
 
     /** The pause before fun grows each time the same fun (app or kind) is started again today, like
-     *  ScreenZen: 5 s, then 10, 20, 40 s at most. */
+     *  ScreenZen: 5 s, then 10, 20, 40 s at most. Only past the cap; before it there is no pause. */
     static int funPause(Context c, String key) {
+        if (!overCap(c)) return 0;
         int n = funCounts(c).optInt(key, 0);
         return Math.min(40, 5 << Math.min(3, n));
     }

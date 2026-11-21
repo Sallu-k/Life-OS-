@@ -50,7 +50,8 @@ const cleanMoney = (m) => ({ currency: typeof m?.currency === "string" && /^[A-Z
 //   gate: { phone: true, pc: true, grace: 2, minutes: [10, 20, 30],
 //           fun: [{ kind: "videos", label: "Videos", app: "com.google.android.youtube" }, ...],
 //           watch: ["com.instagram.android", ...],   apps that bring the Gate back if opened without Fun.
-//           dual: ["com.brave.browser"] }  apps for both work and fun: Purpose lets them through for 10 min.
+//           dual: ["com.brave.browser"],  apps for both work and fun: Purpose lets them through for 10 min.
+//           cap: 180 }  leisure minutes a day with no waiting; past it the growing pauses return.
 const DEFAULT_FUN = [
   { kind: "comics", label: "Comics", app: "com.brave.browser" },
   { kind: "videos", label: "Videos", app: "com.google.android.youtube" },
@@ -79,6 +80,9 @@ function cleanGate(g) {
     watch: Array.isArray(x.watch) ? x.watch.filter((p) => PKG.test(p)).slice(0, 30) : DEFAULT_WATCH,
     dual: Array.isArray(x.dual) ? x.dual.filter((p) => PKG.test(p)).slice(0, 10) : DEFAULT_DUAL,
     night: cleanNight(x.night),
+    // Leisure minutes a day (phone and PC together) with no waiting on the Gates; past it the growing
+    // breaths come back. Raise or lower it as you go.
+    cap: Number.isInteger(Number(x.cap)) && Number(x.cap) >= 30 && Number(x.cap) <= 720 ? Number(x.cap) : 180,
   };
 }
 

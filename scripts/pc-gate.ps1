@@ -37,7 +37,8 @@ $dot = [char]0x00B7
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
   funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null
   urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10; ytSince = [datetime]::MinValue; ytSeen = [datetime]::MinValue; ytNext = [datetime]::MinValue; warned = $null
-  funDay = ""; funCounts = @{}; fits = @(); revealed = $false; greyByUs = $false; greyAt = [datetime]::MinValue }
+  funDay = ""; funCounts = @{}; fits = @(); revealed = $false; greyByUs = $false; greyAt = [datetime]::MinValue; greyUntil = [datetime]::MinValue
+  leisureDay = ""; leisure = 0; seen = @{}; bit = $null }
 
 # ---------- talking to the server (or queueing when it is away) ----------
 
@@ -176,6 +177,7 @@ function Test-GreyTime {
   $n = $state.info.night
   $from = Get-NightFrom
   if (-not $from -or -not $n -or -not $n.grey) { return $false }
+  if ($state.greyUntil -gt (Get-Date)) { return $false }  # delayed from the popup below
   return ((Test-Night) -or (Get-MinutesToNight) -le [int]$n.grey)
 }
 function Update-Grey {
@@ -183,8 +185,36 @@ function Update-Grey {
   $state.greyAt = Get-Date
   $want = Test-GreyTime
   $on = Test-GreyOn
-  if ($want -and -not $on) { Switch-Grey; $state.greyByUs = $true }
+  if ($want -and -not $on) { Switch-Grey; $state.greyByUs = $true; if (-not $greyAsk) { Show-GreyDelay } }
+  # Grey already on in grey time (left by a Gate that restarted): take it as ours, so it can be delayed and ends.
+  elseif ($want -and $on -and -not $state.greyByUs) { $state.greyByUs = $true; if (-not $greyAsk) { Show-GreyDelay } }
   elseif (-not $want -and $on -and $state.greyByUs) { Switch-Grey; $state.greyByUs = $false }
+}
+
+# When LifeOS turns the screen grey: a small popup in the corner to have colour back for 10, 20 or 30 min.
+# Closing it keeps the grey. Each time the delay ends, grey comes back with the popup again.
+$greyAsk = $null
+function Show-GreyDelay {
+  $f = New-Object Windows.Forms.Form
+  $f.Text = "LifeOS"; $f.FormBorderStyle = "FixedToolWindow"; $f.TopMost = $true; $f.ShowInTaskbar = $false
+  $f.BackColor = $bg; $f.ForeColor = $ink; $f.ClientSize = New-Object Drawing.Size(334, 104)
+  $f.StartPosition = "Manual"
+  $wa = [Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+  $f.Location = New-Object Drawing.Point(($wa.Right - 360), ($wa.Bottom - 150))
+  $l = New-Object Windows.Forms.Label
+  $l.Text = "Grey screen: bedtime is near. Colour back for:"; $l.AutoSize = $true; $l.Location = New-Object Drawing.Point(14, 14)
+  $f.Controls.Add($l)
+  $x = 14
+  foreach ($m in 10, 20, 30) {
+    $b = New-Object Windows.Forms.Button
+    $b.Text = "$m min"; $b.Tag = $m; $b.FlatStyle = "Flat"; $b.ForeColor = $ink
+    $b.Size = New-Object Drawing.Size(98, 40); $b.Location = New-Object Drawing.Point($x, 48)
+    $b.add_Click({ $state.greyUntil = (Get-Date).AddMinutes([int]$this.Tag); $state.greyAt = [datetime]::MinValue; $this.FindForm().Close() })
+    $f.Controls.Add($b); $x += 106
+  }
+  $f.add_FormClosed({ $script:greyAsk = $null })
+  $script:greyAsk = $f
+  $f.Show()
 }
 
 
@@ -197,7 +227,33 @@ function Show-Warning($title, $text) { $tray.Visible = $true; $tray.ShowBalloonT
 # A fact read on the Gate counts for Knowledge too (spacing brings it back later).
 function Log-Fact {
   if ($state.fact -and $state.fact.id -and $state.fact.type -ne "recall") { Send-Queued "knowledge/log" @{ events = @(@{ kind = "read"; id = $state.fact.id; at = (Now-Stamp) }) } }
+  if ($state.fact -and $state.fact.id) { $state.seen[$state.fact.id] = $true }
   $state.fact = $null
+}
+
+# ---------- the leisure cap: no waiting until a day's leisure passes gate.cap (default 3 h) ----------
+function Get-Today { (Get-Date).ToString("yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture) }
+function Reset-LeisureDay { $d = Get-Today; if ($state.leisureDay -ne $d) { $state.leisureDay = $d; $state.leisure = 0; $state.seen = @{} } }
+# Leisure minutes started today: this PC's own count, or the server's (phone + PC) when it knows more.
+function Get-LeisureToday {
+  Reset-LeisureDay
+  $both = 0
+  if ($state.info -and $state.info.date -eq (Get-Today) -and $state.info.today) { $both = [int]$state.info.today.funMinutes }
+  return [Math]::Max([int]$state.leisure, $both)
+}
+function Get-Cap { if ($state.info -and $state.info.cap) { [int]$state.info.cap } else { 180 } }
+function Test-OverCap { (Get-LeisureToday) -ge (Get-Cap) }
+function Format-Hours([int]$m) { if ($m % 60) { "$([Math]::Floor($m / 60)) h $($m % 60) min" } else { "$($m / 60) h" } }
+# Each "more" at time's up is longer than the last (a better reward, not a longer wait): 10, 15, 20, then
+# 30 min. Past the cap it stays 10, after a breath of 15 s, then 30 s.
+function Get-MoreMinutes { if (Test-OverCap) { 10 } else { @(10, 15, 20, 30)[[Math]::Min(3, [int]$state.ext)] } }
+function Get-MorePause { if (-not (Test-OverCap)) { 0 } elseif ($state.ext -eq 0) { 15 } else { 30 } }
+# The next thing to learn not yet shown today, or $null.
+function Get-NextBit {
+  Reset-LeisureDay
+  $k = $state.info.knowledge
+  if (-not $k -or -not $k.items) { return $null }
+  return @($k.items) | Where-Object { $_.id -and -not $state.seen[$_.id] -and $_.text } | Select-Object -First 1
 }
 
 # Settings, the book and today's counts; the last copy is kept so the Gate works with the server down.
@@ -545,7 +601,8 @@ function Send-Recall($kind) {
 
 function Show-ReadFirst {
   $k = $state.info.knowledge
-  $fact = if ($k -and $k.items) { @($k.items)[0] } else { $null }
+  Reset-LeisureDay
+  $fact = if ($k -and $k.items) { @($k.items) | Where-Object { -not $state.seen[$_.id] } | Select-Object -First 1 } else { $null }
   $book = if ($k) { $k.passage } else { $null }
   if (-not $fact -and -not $book -and -not $state.info.book) { Show-Kinds; return }
   $again = $state.step -eq "read"  # redrawn after Show answer / Knew it: keep the state
@@ -570,7 +627,7 @@ function Show-ReadFirst {
       }
     } else {
       Add-Text $fact.title 26 $ink $displayBold 10 | Out-Null
-      Add-Text $fact.text 16 $ink $textFace 10 | Out-Null
+      Add-Text $fact.text $(if ("$($fact.text)".Length -gt 300) { 12 } else { 16 }) $ink $textFace 10 | Out-Null
     }
     if ($fact.source) { Add-Text $fact.source 11 $dim $textFace 22 | Out-Null } else { Add-Text "" 4 $dim $textFace 12 | Out-Null }
   } else {
@@ -584,7 +641,7 @@ function Show-ReadFirst {
     Add-Button "Read 10 pages of $($state.info.book.title)" { Read-Paper } $null "P" "A paper book: the PC locks while you read" $noteTint | Out-Null
   }
   $anyway = Add-Button "Leisure anyway" { Log-Fact; Show-LeisureKinds } $null $left $null $funTint
-  if ($fact -and -not $again) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]("$($fact.text)$($fact.q)".Length / 60) * 2 + 2))) }
+  if ($fact -and -not $again -and (Test-OverCap)) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]("$($fact.text)$($fact.q)".Length / 60) * 2 + 2))) }
   Add-Text "Esc goes back" 10.5 $dim $textFace 0 | Out-Null
 }
 
@@ -618,13 +675,15 @@ function Show-Length($kind) {
   $row.MaximumSize = New-Object Drawing.Size(714, 0)
   $n = 1
   $wait = Get-FunPause $kind
-  if ($wait -gt 5) { Add-Text "Leisure again today: a $wait s breath first." 12 $dim $textFace 12 | Out-Null }
+  if ($wait -gt 0) { Add-Text "Over $(Format-Hours (Get-Cap)) of leisure today: a $wait s breath first." 12 $dim $textFace 12 | Out-Null }
   foreach ($m in $fits) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause (Get-FunPause $state.funKind) $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
   Add-Button "Back" { Show-Kinds } $null "Esc" | Out-Null
 }
 
-# The pause before leisure grows each time the same kind is started again today: 5 s, then 10, 20, 40 s.
+# Past the cap, the pause before leisure grows each time the same kind is started again today: 5 s, then
+# 10, 20, 40 s. Before the cap there is none.
 function Get-FunPause($kind) {
+  if (-not (Test-OverCap)) { return 0 }
   $day = (Get-Date).ToString("yyyy-MM-dd", [Globalization.CultureInfo]::InvariantCulture)
   if ($state.funDay -ne $day) { $state.funDay = $day; $state.funCounts = @{} }
   $n = [int]$state.funCounts[$kind]
@@ -634,6 +693,8 @@ function Add-FunCount($kind) { $state.funCounts[$kind] = [int]$state.funCounts[$
 
 function Start-Fun($kind, [int]$minutes, [bool]$extension) {
   if (-not $extension) { Add-FunCount $kind }
+  Reset-LeisureDay
+  $state.leisure = [int]$state.leisure + $minutes
   $state.funKind = $kind
   $state.funUntil = (Get-Date).AddMinutes($minutes)
   $state.funMinutes = if ($extension) { $state.funMinutes + $minutes } else { $minutes }
@@ -645,12 +706,22 @@ function Show-TimeUp {
   Clear-Step "timeup"
   $state.mode = "timeup"
   Add-Text "Time's up" 34 $ink $displayBold 6 | Out-Null
-  Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 24 | Out-Null
+  Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 14 | Out-Null
+  # One thing to learn while you choose; counted as read whichever you pick.
+  $state.fact = Get-NextBit
+  if ($state.fact) {
+    Add-Text $state.fact.title 11 $dim $textFace 4 | Out-Null
+    Add-Text $state.fact.text $(if ("$($state.fact.text)".Length -gt 300) { 12 } else { 15 }) $ink $textFace 14 | Out-Null
+  }
+  if (Test-OverCap) { Add-Text "Over $(Format-Hours (Get-Cap)) of leisure today: the pauses are back." 12 $funTint $textFace 10 | Out-Null }
   $row = Add-Row 80
-  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } } -Primary | Out-Null
-  $state.more = [Math]::Min(10, (Get-MinutesToNight))  # never past the night lock
-  if ($state.more -ge 5) { Add-Card $row 343 66 "$($state.more) more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } | Out-Null }
+  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { Stop-TimeUp } -Primary | Out-Null
+  $state.more = [Math]::Min((Get-MoreMinutes), (Get-MinutesToNight))  # never past the night lock
+  $sub = if ((Get-MorePause) -gt 0) { "After a longer breath" } else { "No wait" }
+  if ($state.more -ge 5) { Add-Card $row 343 66 "$($state.more) more" $sub "M" $funTint { More-TimeUp } | Out-Null }
 }
+function Stop-TimeUp { Log-Fact; $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } }
+function More-TimeUp { Log-Fact; Start-Pause (Get-MorePause) $state.funKind $state.more $true }
 
 function Show-Night {
   Clear-Step "night"
@@ -715,6 +786,7 @@ function Stop-Pause {
 
 # $text and $then: an urgent pass at night uses the same breath ("Opening in", then the pass).
 function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension, $text = "Leisure in", [scriptblock]$then = $null) {
+  if ($seconds -le 0) { if ($then) { & $then } else { Start-Fun $kind $minutes $extension }; return }  # under the cap: no wait
   Clear-Step "pause"
   $pause.left = $seconds
   $pause.kind = $kind
@@ -799,7 +871,7 @@ $form.add_KeyDown({
     }
     "kinds" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.fun).Count) { Show-Length @($state.info.fun)[$n].kind } }
     "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.fits).Count) { Start-Pause (Get-FunPause $state.funKind) $state.funKind ([int]@($state.fits)[$n]) $false } }
-    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Show-Moment "done" "Good stop." { $afterTimer.Start() } } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
+    "timeup" { if ($key -eq "D") { Stop-TimeUp } elseif ($key -eq "M" -and $state.more -ge 5) { More-TimeUp } }
     "night" {
       switch ($key) { "L" { Show-Moment "back" "Good night.`nSleep well." { rundll32.exe user32.dll,LockWorkStation } } "S" { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } "N" { $state.nightNote = $true; Show-Write $true } "U" { Show-Urgent } }
       return
@@ -858,9 +930,30 @@ if ($Shot) {
   Start-Pause 5 "videos" 10 $false; $pause.started = (Get-Date).AddSeconds(-4); & $snap "5-breathe"; $pauseTimer.Stop()
   Show-Write $true; & $snap "6-note"
   $state.funMinutes = 20; $state.funKind = "videos"; Show-TimeUp; & $snap "7-timeup"
+  # The leisure cap: no waits and longer "more"s before it, the breaths again after it.
+  Reset-LeisureDay
+  $state.info | Add-Member -Force knowledge (Get-Info).knowledge
+  $state.seen = @{}; $state.leisure = 0; $state.ext = 0
+  if ((Get-FunPause "videos") -ne 0 -or (Get-MorePause) -ne 0 -or (Get-MoreMinutes) -ne 10) { throw "cap: no waits before it" }
+  $state.ext = 2
+  if ((Get-MoreMinutes) -ne 20) { throw "cap: the third more should be 20 min" }
+  Show-TimeUp; & $snap "7b-timeup-bit"
+  $state.leisure = Get-Cap
+  if ((Get-FunPause "videos") -lt 5 -or (Get-MorePause) -ne 30 -or (Get-MoreMinutes) -ne 10) { throw "cap: the waits should be back" }
+  Show-TimeUp; & $snap "7c-timeup-over-cap"
+  $state.leisure = 0; $state.ext = 0; $state.fact = $null
   # The night lock, as if it started 12 minutes from now, then as if it had started.
   $hhmm = { param($d) $d.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture) }
   $state.info | Add-Member -Force night ([pscustomobject]@{ from = (& $hhmm (Get-Date).AddMinutes(12)); until = (& $hhmm (Get-Date).AddHours(6)) })
+  $state.info.night | Add-Member -Force grey 30
+  if (-not (Test-GreyTime)) { throw "grey: should be on 12 min before the night lock" }
+  $state.greyUntil = (Get-Date).AddMinutes(10)
+  if (Test-GreyTime) { throw "grey: a delay should hold it back" }
+  $state.greyUntil = [datetime]::MinValue
+  Show-GreyDelay; [Windows.Forms.Application]::DoEvents()
+  $gb = New-Object Drawing.Bitmap($greyAsk.Width, $greyAsk.Height)
+  $greyAsk.DrawToBitmap($gb, (New-Object Drawing.Rectangle(0, 0, $greyAsk.Width, $greyAsk.Height)))
+  $gb.Save((Join-Path $Shot "8a-grey-delay.png"), [Drawing.Imaging.ImageFormat]::Png); $greyAsk.Close()
   Show-Length "videos"; & $snap "8-length-before-night"
   Show-TimeUp; & $snap "9-timeup-before-night"
   $state.info.night.from = (& $hhmm (Get-Date).AddMinutes(-5))

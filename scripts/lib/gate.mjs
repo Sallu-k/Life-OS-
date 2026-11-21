@@ -110,6 +110,7 @@ export function gateInfo(today) {
   const tasks = topTasksOf(today);
   return {
     ...settings.gate,
+    date: today, // the phone trusts `today` counts only on this date
     accent: settings.theme.accent,
     book,
     bank: getRewards(today).bank,
