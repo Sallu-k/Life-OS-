@@ -53,6 +53,9 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
 - **Night lock** (optional, Settings › The Gate): after a time you pick (e.g. 22:30) the Gate offers only
   Sleep, a note for tomorrow, or Urgent (say what, wait a minute, then 15 minutes). No leisure; leisure
   timers end when it starts. On the PC it comes back while you keep using it, and can shut down.
+- **YouTube on the PC**: YouTube in Brave counts as leisure. Opening it without a leisure timer brings the Gate
+  (Purpose gives a 10-minute pass, then "Still for the task?"); at the night lock the tab closes. Games are
+  never stopped mid-way: the night Gate waits until a game ends. Window titles are read in memory only.
 - **Your one thing**: the Gate shows your most important open task (priority first, then overdue or with a
   deadline, then by time) with **Done** to tick it there; the next one takes its place.
 - Apps for both work and fun (default: Brave): Purpose lets them through for 10 minutes, then the Gate asks

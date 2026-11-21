@@ -36,7 +36,7 @@ $dot = [char]0x00B7
 
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
   funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null
-  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10 }
+  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10; ytPass = [datetime]::MinValue; warned = $null }
 
 # ---------- talking to the server (or queueing when it is away) ----------
 
@@ -75,7 +75,7 @@ function Log-Choice($choice, $kind = $null, $minutes = 0) {
   $e = @{ device = "pc"; choice = $choice; at = (Now-Stamp) }
   if ($kind) { $e.kind = $kind }
   if ($minutes -gt 0) { $e.minutes = $minutes }
-  if ($choice -notin @("more", "done") -and $state.mode -in @("unlock", "start")) { $e.via = $state.mode }  # the log knows only these
+  if ($choice -notin @("more", "done") -and $state.mode -in @("unlock", "start", "app", "still")) { $e.via = $(if ($state.mode -eq "still") { "app" } else { $state.mode }) }  # the log knows only these
   Send-Queued "gate" $e
 }
 
@@ -106,6 +106,54 @@ function Get-MinutesToNight {
   $now = (Get-Date).Hour * 60 + (Get-Date).Minute
   return (((Get-MinuteOfDay $from) - $now) % 1440 + 1440) % 1440
 }
+
+# ---------- what is in front: YouTube in Brave, games ----------
+# YouTube in Brave counts as leisure: opening it without a leisure timer brings the Gate (Purpose gives a
+# 10-minute pass, then "Still for the task?"). Games are not flagged or stopped mid-way: while one runs the
+# night Gate waits until it ends. At the night lock, YouTube tabs close (with a warning 10 minutes before).
+# Window titles are read in memory only, never saved or sent.
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class LifeOSFront {
+  [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  public static string Title() { var s = new StringBuilder(512); GetWindowText(GetForegroundWindow(), s, 512); return s.ToString(); }
+  public static uint Pid() { uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid); return pid; }
+}
+'@
+function Get-Front {
+  try {
+    $p = Get-Process -Id ([LifeOSFront]::Pid()) -ErrorAction Stop
+    return @{ name = $p.ProcessName; title = [LifeOSFront]::Title() }
+  } catch { return @{ name = ""; title = "" } }
+}
+function Test-YouTube($front) { return ($front.name -eq "brave" -and $front.title -match "YouTube") }
+
+# Games: every exe Windows' Game Bar knows as a game, plus the usual game folders (launchers excluded).
+$gameExes = @{}
+try { Get-ChildItem "HKCU:\System\GameConfigStore\Children" -ErrorAction Stop | ForEach-Object { $x = (Get-ItemProperty $_.PSPath).MatchedExeFullPath; if ($x) { $gameExes[$x.ToLower()] = $true } } } catch { }
+$gameFolders = '\\steamapps\\common\\|\\riot games\\valorant\\|\\epic games\\(?!launcher|epic online services)|\\xboxgames\\|\\ea games\\|^[a-z]:\\games\\'
+# Background helpers that live in game folders but are not games (Wallpaper Engine, overlays, crash handlers).
+$notGames = '^(wallpaper(32|64)|eosoverlayrenderer.*|epiconlineservices.*|.*crashhandler.*|.*crashreport.*|steamwebhelper|easyanticheat.*)$'
+$gameCheck = @{ at = [datetime]::MinValue; on = $false }
+function Test-GameRunning {
+  if (((Get-Date) - $gameCheck.at).TotalSeconds -lt 10) { return $gameCheck.on }  # looked at most every 10 s
+  $gameCheck.at = Get-Date
+  # A game counts only with a window of its own (running in the background is not playing).
+  $gameCheck.on = [bool](Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.MainWindowHandle -ne 0 -and $_.ProcessName.ToLower() -notmatch $notGames -and ($gameExes[$_.Path.ToLower()] -or $_.Path.ToLower() -match $gameFolders) } | Select-Object -First 1)
+  return $gameCheck.on
+}
+
+function Close-YouTubeTab { if (Test-YouTube (Get-Front)) { [Windows.Forms.SendKeys]::SendWait("^w") } }  # only when YouTube is in front
+
+# A Windows notification (10 minutes before the night lock).
+$tray = New-Object Windows.Forms.NotifyIcon
+$tray.Icon = [Drawing.SystemIcons]::Information
+$tray.Text = "LifeOS Gate"
+function Show-Warning($title, $text) { $tray.Visible = $true; $tray.ShowBalloonTip(15000, $title, $text, "Info") }
 
 # A fact read on the Gate counts for Knowledge too (spacing brings it back later).
 function Log-Fact {
@@ -330,7 +378,8 @@ function Get-Context {
 
 function Show-Dial {
   Clear-Step "dial"
-  Add-Text "Why now?" 34 $ink $displayBold 6 | Out-Null
+  $yt = $state.mode -eq "app"
+  Add-Text $(if ($yt) { "Opening YouTube" } else { "Why now?" }) 34 $ink $displayBold 6 | Out-Null
   $one = @($state.info.topTasks)[0]
   if ($one) {
     # Your one thing: the most important open task. Click it (or Enter) to do it now; Done (D) ticks it.
@@ -346,12 +395,35 @@ function Show-Dial {
   # The phone's slider, side by side: Leisure on the left, Purpose on the right.
   $top = Add-Row 196
   Add-Card $top 343 182 "Leisure" "A fact first, then a timer" "$left" $funTint { Show-ReadFirst } | Out-Null
-  Add-Card $top 343 182 "Purpose" "Work, study, something that matters" "$right" $brass { Close-Gate "unlock" } | Out-Null
+  Add-Card $top 343 182 "Purpose" $(if ($yt) { "For a task: 10 minutes, then it asks again" } else { "Work, study, something that matters" }) "$right" $brass { Select-Purpose } | Out-Null
   $bottom = Add-Row 80
   Add-Card $bottom 343 66 "Note" "Jot it down, then go" "N" $noteTint { Show-Write $true } | Out-Null
   Add-Card $bottom 343 66 "Task" "Add it to today, then go" "T" $taskTint { Show-Write $false } | Out-Null
+  if ($yt) { Add-Text "Esc closes YouTube" 11 $dim $textFace 4 | Out-Null }
   $t = $state.info.today
   if ($t) { Add-Text "Today $dot $($t.gates) unlocks $dot $($t.unlock) for purpose $dot $($t.fun) for leisure" 11 $dim $textFace 0 | Out-Null }
+}
+
+# Purpose. From YouTube: a 10-minute pass; when it runs out with YouTube still in front, "Still for the task?".
+function Select-Purpose {
+  if ($state.mode -in @("app", "still")) { $state.ytPass = (Get-Date).AddMinutes(10) }
+  Close-Gate "unlock"
+}
+
+# Turned back from YouTube (or done): the Gate goes, and so does the YouTube tab.
+function Close-YouTube($choice = "back") {
+  Close-Gate $choice
+  $afterTimer.Start()  # once the Gate is gone and Brave is in front again
+}
+
+function Show-Still {
+  Clear-Step "still"
+  Add-Text "Still for the task?" 34 $ink $displayBold 6 | Out-Null
+  Add-Text "10 minutes of YouTube are up." 14 $dim $textFace 24 | Out-Null
+  $row = Add-Row 80
+  Add-Card $row 224 66 "Yes, 10 more" $null "Y" $brass { Select-Purpose } | Out-Null
+  Add-Card $row 224 66 "Task done" $null "D" $noteTint { Close-YouTube "done" } -Primary | Out-Null
+  Add-Card $row 224 66 "Leisure now" $null "L" $funTint { Show-ReadFirst } | Out-Null
 }
 
 # Ticks your one thing (sent now, or queued while the server is away) and shows the next one.
@@ -455,10 +527,13 @@ function Show-ReadFirst {
   if ($state.info.book) {
     Add-Button "Read 10 pages of $($state.info.book.title)" { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation } $null "P" "A paper book: the PC locks while you read" $noteTint | Out-Null
   }
-  $anyway = Add-Button "Leisure anyway" { Log-Fact; Show-Kinds } $null $left $null $funTint
+  $anyway = Add-Button "Leisure anyway" { Log-Fact; Show-LeisureKinds } $null $left $null $funTint
   if ($fact) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]($fact.text.Length / 60) * 2 + 2))) }
   Add-Text "Esc goes back" 10.5 $dim $textFace 0 | Out-Null
 }
+
+# From YouTube the kind is already known (videos); otherwise ask.
+function Show-LeisureKinds { if ($state.mode -in @("app", "still")) { Show-Length "videos" } else { Show-Kinds } }
 
 function Show-Kinds {
   Clear-Step "kinds"
@@ -505,7 +580,7 @@ function Show-TimeUp {
   Add-Text "Time's up" 34 $ink $displayBold 6 | Out-Null
   Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 24 | Out-Null
   $row = Add-Row 80
-  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } -Primary | Out-Null
+  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Close-YouTube "done" } -Primary | Out-Null
   $state.more = [Math]::Min(10, (Get-MinutesToNight))  # never past the night lock
   if ($state.more -ge 5) { Add-Card $row 343 66 "$($state.more) more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } | Out-Null }
 }
@@ -600,6 +675,11 @@ function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension, $tex
   $breathTimer.Start()
 }
 
+# Closes the YouTube tab half a second after the Gate goes (Brave is in front again by then).
+$afterTimer = New-Object Windows.Forms.Timer
+$afterTimer.Interval = 500
+$afterTimer.add_Tick({ $afterTimer.Stop(); Close-YouTubeTab })
+
 # Fades in, like the phone's Gate.
 $fadeTimer = New-Object Windows.Forms.Timer
 $fadeTimer.Interval = 15
@@ -613,7 +693,7 @@ function Show-Gate($mode) {
   $state.answered = $false
   $state.nightNote = $false
   if (Test-Night) { if ($mode -eq "timeup") { $state.funUntil = [datetime]::MinValue }; Show-Night }
-  elseif ($mode -eq "timeup") { Show-TimeUp } else { Show-Dial }
+  elseif ($mode -eq "timeup") { Show-TimeUp } elseif ($mode -eq "still") { Show-Still } else { Show-Dial }
   $form.Opacity = 0
   $form.Show()
   $form.Activate()
@@ -628,18 +708,20 @@ $form.add_KeyDown({
   switch ($state.step) {
     "dial" {
       if ($key -eq "D" -and @($state.info.topTasks)[0]) { Complete-Task; return }
-      switch ($key) { { $_ -in "Right", "Return", "D1", "NumPad1" } { Close-Gate "unlock" } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
+      if ($key -eq "Escape" -and $state.mode -eq "app") { Close-YouTube; return }
+      switch ($key) { { $_ -in "Right", "Return", "D1", "NumPad1" } { Select-Purpose } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
       return
     }
     "read" {
       $book = $state.info.knowledge.passage
       if ($key -eq "B" -and $book) { Log-Fact; Close-Gate "read"; Start-Process "$site/read/" }
       elseif ($key -eq "P" -and $state.info.book) { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation }
-      elseif ($key -eq "Left" -and -not $holdTimer.Enabled) { Log-Fact; Show-Kinds }
+      elseif ($key -eq "Left" -and -not $holdTimer.Enabled) { Log-Fact; Show-LeisureKinds }
     }
     "kinds" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.fun).Count) { Show-Length @($state.info.fun)[$n].kind } }
     "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.minutes).Count) { Start-Pause 5 $state.funKind ([int]@($state.info.minutes)[$n]) $false } }
-    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
+    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-YouTube "done" } elseif ($key -eq "M" -and $state.more -ge 5) { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind $state.more $true } }
+    "still" { switch ($key) { "Y" { Select-Purpose } "D" { Close-YouTube "done" } "L" { Show-ReadFirst } }; return }
     "night" {
       switch ($key) { "L" { Close-Gate "back"; rundll32.exe user32.dll,LockWorkStation } "S" { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } "N" { $state.nightNote = $true; Show-Write $true } "U" { Show-Urgent } }
       return
@@ -684,6 +766,7 @@ if ($Shot) {
     $bmp.Save((Join-Path $Shot "$name.png"), [Drawing.Imaging.ImageFormat]::Png)
   }
   Show-Dial; & $snap "1-dial"
+  $state.mode = "app"; Show-Dial; & $snap "1b-youtube"; Show-Still; & $snap "1c-still"; $state.mode = "unlock"
   Show-ReadFirst; & $snap "2-read-first"
   Show-Kinds; & $snap "3-kinds"
   Show-Length "videos"; & $snap "4-length"
@@ -723,9 +806,26 @@ $watch.add_Tick({
     if ($now.Second -eq 0) { $form.Invalidate() }  # the clock
     return
   }
-  # Night lock: while the PC is in use after the start time, the night Gate comes back (an urgent pass
-  # keeps it away for 15 minutes). Leisure timers were cut to end at the start time.
-  if (-not $locked -and (Test-Night) -and $state.urgentUntil -lt $now -and ($now - $state.passed).TotalSeconds -ge 20) { Show-Gate "unlock"; return }
+  $front = $(if ($locked) { @{ name = ""; title = "" } } else { Get-Front })
+  # 10 minutes before the night lock: a warning, once, if YouTube is open.
+  $toNight = Get-MinutesToNight
+  if (-not $locked -and $toNight -gt 0 -and $toNight -le 10 -and $state.warned -ne $now.Date) {
+    $state.warned = $now.Date
+    if (Test-YouTube $front) { Show-Warning "Night lock in $toNight minutes" "YouTube closes at $(Get-NightFrom)." }
+  }
+  # Night lock: YouTube closes (even with an urgent pass). While the PC is in use the night Gate
+  # comes back (an urgent pass keeps it away for 15 minutes), except while a game runs: games are never stopped.
+  if (-not $locked -and (Test-Night)) {
+    if (Test-YouTube $front) { Close-YouTubeTab }
+    if ($state.urgentUntil -lt $now -and ($now - $state.passed).TotalSeconds -ge 20 -and -not (Test-GameRunning)) { Show-Gate "unlock"; return }
+  }
+  # YouTube in Brave is leisure: without a leisure timer or a Purpose pass, the Gate comes.
+  if (-not $locked -and -not (Test-Night) -and (Test-YouTube $front) -and $state.funUntil -lt $now -and $state.ytPass -lt $now -and ($now - $state.passed).TotalSeconds -ge 3) {
+    $mode = $(if ($state.ytPass -ne [datetime]::MinValue) { "still" } else { "app" })
+    $state.ytPass = [datetime]::MinValue
+    Show-Gate $mode
+    return
+  }
   $funOn = $state.funUntil -gt $now
   if ($state.funUntil -ne [datetime]::MinValue -and -not $funOn) {
     $state.funUntil = [datetime]::MinValue
