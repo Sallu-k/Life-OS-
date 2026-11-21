@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { dayLabel } from "@/lib/format";
 import { feel } from "@/lib/feel/sounds";
 import { readKept, send } from "@/lib/offline";
-import { localToday } from "./types";
+import { Fold } from "./Fold";
+import { reactSaved } from "./reactions";
+import { localToday, type Day } from "./types";
 
 interface Note {
   date: string;
@@ -20,7 +22,8 @@ const now = () => {
 // Today's Notes tab: everything you jot (here, on the Gate, with quick add), newest first, by date. Kept in
 // the vault's Inbox/Inbox.md, private like the journal: shown live only, never built into pages.
 // Adding works offline too: the note goes into the outbox and shows here at once.
-export function NotesTab() {
+// On top: the day's journal and keep line (they were on Today until the tabs gave them room again).
+export function NotesTab({ day, readOnly, onSave }: { day: Day | null; readOnly: boolean; onSave(c: Partial<Day>): void }) {
   const [notes, setNotes] = useState<Note[] | null>(null);
   const [text, setText] = useState("");
   const [offline, setOffline] = useState(false);
@@ -31,11 +34,13 @@ export function NotesTab() {
     );
   }, []);
 
-  function add() {
+  const [msg, setMsg] = useState("");
+  function add(kind: "inbox" | "brainstorm") {
     const body = text.trim();
     if (!body) return;
-    send({ kind: "post", path: "capture", body: { kind: "inbox", text: body } });
-    setNotes((n) => [{ date: localToday(), time: now(), text: body }, ...(n ?? [])]);
+    send({ kind: "post", path: "capture", body: { kind, text: body } });
+    if (kind === "inbox") setNotes((n) => [{ date: localToday(), time: now(), text: body }, ...(n ?? [])]);
+    setMsg(kind === "brainstorm" ? "Brainstorm note made (in Brainstorm/)." : "");
     setText("");
     feel("saved");
   }
@@ -43,6 +48,7 @@ export function NotesTab() {
   const days = [...new Set((notes ?? []).map((n) => n.date))];
   return (
     <div className="flex flex-col gap-5">
+      {day && !day.future && <Journal key={`${day.date}|${day.journal}|${day.keep}`} day={day} readOnly={readOnly} onSave={onSave} />}
       <div className="card flex flex-col gap-3 p-4 sm:p-5">
         <textarea
           className="today-input min-h-20"
@@ -51,10 +57,14 @@ export function NotesTab() {
           placeholder="A thought, an idea, something to remember…"
           aria-label="New note"
         />
-        <div className="flex items-center gap-3">
-          <button type="button" className="chip edit-primary" onClick={add} disabled={!text.trim()}>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" className="chip edit-primary" onClick={() => add("inbox")} disabled={!text.trim()}>
             Save note
           </button>
+          <button type="button" className="chip" onClick={() => add("brainstorm")} disabled={!text.trim()}>
+            Brainstorm idea
+          </button>
+          {msg && <span className="text-xs text-ink-dim">{msg}</span>}
           {offline && <span className="text-xs text-ink-dim">Offline: saved here, sent when the PC answers.</span>}
         </div>
       </div>
@@ -80,5 +90,30 @@ export function NotesTab() {
         ))
       )}
     </div>
+  );
+}
+
+// The day's journal (private: never shown on the site) and its keep line (shown on the Habits page).
+function Journal({ day, readOnly, onSave }: { day: Day; readOnly: boolean; onSave(c: Partial<Day>): void }) {
+  const [journal, setJournal] = useState(day.journal);
+  const [keep, setKeep] = useState(day.keep);
+  const [saved, setSaved] = useState(true);
+  const save = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onSave({ journal, keep });
+    setSaved(true);
+    reactSaved(e.currentTarget);
+  };
+  const when = day.date === localToday() ? "today" : dayLabel(day.date);
+  return (
+    <Fold id="journal" title="Journal" summary={journal.trim() ? `Written ${when} · private` : `${when} · private`} defaultOpen>
+      <textarea className="today-input min-h-40" disabled={readOnly} value={journal} onChange={(e) => (setJournal(e.target.value), setSaved(false))} placeholder="How did the day go?" aria-label="Journal" />
+      <label className="edit-field">
+        <span>Keep line (shown on the Habits page)</span>
+        <input className="today-input" disabled={readOnly} value={keep} onChange={(e) => (setKeep(e.target.value), setSaved(false))} placeholder="One line worth keeping" />
+      </label>
+      <button type="button" className="chip edit-primary w-fit" onClick={save} disabled={saved || readOnly}>
+        {saved ? "Saved" : "Save journal"}
+      </button>
+    </Fold>
   );
 }

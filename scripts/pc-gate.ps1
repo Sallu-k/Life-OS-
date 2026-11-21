@@ -1,14 +1,20 @@
 # The Gate on the PC: "Why now?" right after Windows sign-in and after every unlock (Win+L, wake from sleep).
-# Same four choices as the phone: 1 Unlock (urgent, no questions), 2 Fun (your book is offered first, then
-# what kind and how long; when the time runs out the Gate asks again), 3 Note (to Inbox), 4 Task (for today).
+# The same choices as the phone: Purpose (right arrow, urgent, straight in), Leisure (left arrow: a fact
+# first, or "Continue my book" which opens the book reader, then what kind and how long; when the time runs
+# out the Gate asks again), Note (N, to the Inbox) and Task (T, for today). Keys 1-4 still work too.
 # Each choice is logged by the LifeOS server (POST /api/gate, choice and numbers only). When the server is
 # not running, choices, notes and tasks wait in %LOCALAPPDATA%\LifeOS\gate-pending.jsonl and are sent later.
 # Started (and restarted if it stops) by the keeper in pc-app.ps1. Run by hand to try it:
 #   powershell -ExecutionPolicy Bypass -File scripts\pc-gate.ps1 -AtStart
-param([switch]$AtStart)
+# To check the design without showing it or logging anything, save a picture of each step:
+#   powershell -ExecutionPolicy Bypass -File scripts\pc-gate.ps1 -Shot C:\some\folder
+# This file stays plain ASCII (Windows PowerShell reads it as ANSI): symbols are written as [char] codes.
+param([switch]$AtStart, [string]$Shot)
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+[Windows.Forms.Application]::EnableVisualStyles()
 $api = if ($env:LIFEOS_GATE_API) { $env:LIFEOS_GATE_API } else { "http://127.0.0.1:4173/api" }  # override only for testing
+$site = $api -replace "/api$", ""
 $dir = Join-Path $env:LOCALAPPDATA "LifeOS"
 $pending = Join-Path $dir "gate-pending.jsonl"
 $infoFile = Join-Path $dir "gate-info.json"
@@ -18,19 +24,24 @@ New-Item -ItemType Directory -Force $dir | Out-Null
 $bg = [Drawing.ColorTranslator]::FromHtml("#0B0B0D")
 $ink = [Drawing.ColorTranslator]::FromHtml("#F2F2F4")
 $dim = [Drawing.ColorTranslator]::FromHtml("#9B9BA3")
-$brass = [Drawing.ColorTranslator]::FromHtml("#8AB4FF")  # replaced by the accent from Settings when set
+$brass = [Drawing.ColorTranslator]::FromHtml("#8AB4FF")  # Purpose; replaced by the accent from Settings when set
 $funTint = [Drawing.ColorTranslator]::FromHtml("#F2A65A")
 $noteTint = [Drawing.ColorTranslator]::FromHtml("#6FCF97")
 $taskTint = [Drawing.ColorTranslator]::FromHtml("#C58AF9")
+$fieldBg = [Drawing.ColorTranslator]::FromHtml("#1C1C21")  # a text box on the glass surface
+
+$right = [char]0x2192
+$left = [char]0x2190
+$dot = [char]0x00B7
 
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
-  funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null }
+  funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null }
 
 # ---------- talking to the server (or queueing when it is away) ----------
 
 function Send-Item($path, $body) {
   try {
-    $bytes = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress))
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress -Depth 6))
     Invoke-RestMethod "$api/$path" -Method Post -Body $bytes -ContentType "application/json; charset=utf-8" -TimeoutSec 5 | Out-Null
     return $true
   } catch {
@@ -41,34 +52,45 @@ function Send-Item($path, $body) {
 }
 
 function Send-Queued($path, $body) {
+  if ($Shot) { return }  # pictures only: nothing is sent or logged
   Send-Pending
-  if (-not (Send-Item $path $body)) { (@{ path = $path; body = $body } | ConvertTo-Json -Compress -Depth 4) | Add-Content $pending -Encoding UTF8 }
+  if (-not (Send-Item $path $body)) { (@{ path = $path; body = $body } | ConvertTo-Json -Compress -Depth 8) | Add-Content $pending -Encoding UTF8 }
 }
 
 function Send-Pending {
   if (-not (Test-Path $pending)) { return }
   $lines = @(Get-Content $pending -Encoding UTF8 | Where-Object { $_.Trim() })
-  $left = @()
+  $keep = @()
   foreach ($line in $lines) {
     $item = $line | ConvertFrom-Json
-    if ($left.Count -gt 0 -or -not (Send-Item $item.path $item.body)) { $left += $line }  # keep the order
+    if ($keep.Count -gt 0 -or -not (Send-Item $item.path $item.body)) { $keep += $line }  # keep the order
   }
-  if ($left.Count) { Set-Content $pending $left -Encoding UTF8 } else { Remove-Item $pending -ErrorAction SilentlyContinue }
+  if ($keep.Count) { Set-Content $pending $keep -Encoding UTF8 } else { Remove-Item $pending -ErrorAction SilentlyContinue }
 }
 
+function Now-Stamp { return (Get-Date).ToString("yyyy-MM-dd HH:mm", [Globalization.CultureInfo]::InvariantCulture) }  # some cultures write 15.45
+
 function Log-Choice($choice, $kind = $null, $minutes = 0) {
-  $e = @{ device = "pc"; choice = $choice; at = (Get-Date).ToString("yyyy-MM-dd HH:mm", [Globalization.CultureInfo]::InvariantCulture) }  # some cultures write 15.45
+  $e = @{ device = "pc"; choice = $choice; at = (Now-Stamp) }
   if ($kind) { $e.kind = $kind }
   if ($minutes -gt 0) { $e.minutes = $minutes }
   if ($choice -notin @("more", "done")) { $e.via = $state.mode }
   Send-Queued "gate" $e
 }
 
+# A fact read on the Gate counts for Knowledge too (spacing brings it back later).
+function Log-Fact {
+  if ($state.fact -and $state.fact.id) { Send-Queued "knowledge/log" @{ events = @(@{ kind = "read"; id = $state.fact.id; at = (Now-Stamp) }) } }
+  $state.fact = $null
+}
+
 # Settings, the book and today's counts; the last copy is kept so the Gate works with the server down.
 function Get-Info {
   try {
-    $text = (Invoke-WebRequest "$api/gate" -UseBasicParsing -TimeoutSec 3).Content
-    Set-Content $infoFile $text -Encoding UTF8
+    # Read as UTF-8 (the server sends no charset, so .Content would garble middle dots, accents and non-Latin scripts).
+    $r = Invoke-WebRequest "$api/gate" -UseBasicParsing -TimeoutSec 3
+    $text = [Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray())
+    if (-not $Shot) { Set-Content $infoFile $text -Encoding UTF8 }
   } catch {
     $text = if (Test-Path $infoFile) { Get-Content $infoFile -Raw -Encoding UTF8 } else { "{}" }
   }
@@ -78,6 +100,18 @@ function Get-Info {
   if ($null -eq $i.grace) { $i | Add-Member -Force grace 2 }
   return $i
 }
+
+# ---------- type ----------
+# Windows 11's Segoe UI Variable; Segoe UI where it is missing (GDI+ would silently use another font).
+function Get-Font($family, [float]$size, $style = "Regular") {
+  $f = New-Object Drawing.Font($family, $size, [Drawing.FontStyle]$style)
+  if ($f.Name -ne $family) { $f = New-Object Drawing.Font("Segoe UI", $size, [Drawing.FontStyle]$style) }
+  return $f
+}
+$display = "Segoe UI Variable Display"
+$displayBold = "Segoe UI Variable Display Semib"
+$displayLight = "Segoe UI Variable Display Light"
+$textFace = "Segoe UI Variable Text"
 
 # ---------- the window ----------
 
@@ -96,11 +130,13 @@ $panel.AutoSizeMode = "GrowAndShrink"
 $panel.BackColor = [Drawing.Color]::Transparent
 $form.Controls.Add($panel)
 $form.GetType().GetProperty("DoubleBuffered", [Reflection.BindingFlags]"NonPublic,Instance").SetValue($form, $true)
-# A soft glow in the accent colour (top left) and a second one (bottom right), like the phone's wallpaper glow.
+# Two soft glows (Purpose's colour top left, Leisure's bottom right) and the clock at the top.
 $form.add_Paint({
   param($s, $e)
   $g = $e.Graphics
-  foreach ($glow in @(@{ c = $brass; a = 70; x = -0.25; y = -0.55; w = 0.9; h = 1.2 }, @{ c = $taskTint; a = 40; x = 0.45; y = 0.35; w = 0.8; h = 1.0 })) {
+  $g.SmoothingMode = "AntiAlias"
+  $g.TextRenderingHint = "AntiAliasGridFit"
+  foreach ($glow in @(@{ c = $brass; a = 60; x = -0.25; y = -0.55; w = 0.9; h = 1.2 }, @{ c = $funTint; a = 28; x = 0.5; y = 0.4; w = 0.8; h = 1.0 })) {
     $path = New-Object Drawing.Drawing2D.GraphicsPath
     $path.AddEllipse([float]($s.Width * $glow.x), [float]($s.Height * $glow.y), [float]($s.Width * $glow.w), [float]($s.Height * $glow.h))
     $brush = New-Object Drawing.Drawing2D.PathGradientBrush($path)
@@ -108,28 +144,39 @@ $form.add_Paint({
     $brush.SurroundColors = @([Drawing.Color]::FromArgb(0, $glow.c))
     $g.FillPath($brush, $path)
   }
+  $now = Get-Date
+  $time = $now.ToString("HH:mm", [Globalization.CultureInfo]::InvariantCulture)
+  $date = $now.ToString("dddd, d MMMM", [Globalization.CultureInfo]::InvariantCulture)
+  $tf = Get-Font $displayLight 54
+  $df = Get-Font $textFace 13
+  $tsz = $g.MeasureString($time, $tf)
+  $dsz = $g.MeasureString($date, $df)
+  $g.DrawString($time, $tf, (New-Object Drawing.SolidBrush($ink)), (($s.ClientSize.Width - $tsz.Width) / 2), 56)
+  $g.DrawString($date, $df, (New-Object Drawing.SolidBrush($dim)), (($s.ClientSize.Width - $dsz.Width) / 2), (60 + $tsz.Height))
 })
-$center = { $panel.Left = [int](($form.ClientSize.Width - $panel.Width) / 2); $panel.Top = [int](($form.ClientSize.Height - $panel.Height) / 2.5) }
+$center = { $panel.Left = [int](($form.ClientSize.Width - $panel.Width) / 2); $panel.Top = [int]([Math]::Max(200, ($form.ClientSize.Height - $panel.Height) / 2 + 40)) }
 $form.add_Resize($center)
 $panel.add_SizeChanged($center)
 
-function Add-Text($text, $size = 18, $color = $ink) {
+function Add-Text($text, [float]$size = 16, $color = $ink, $face = $textFace, [int]$after = 14) {
   $l = New-Object Windows.Forms.Label
   $l.Text = $text
   $l.AutoSize = $true
-  $l.MaximumSize = New-Object Drawing.Size(680, 0)
+  $l.MaximumSize = New-Object Drawing.Size(700, 0)
   $l.ForeColor = $color
   $l.BackColor = [Drawing.Color]::Transparent
-  $l.Font = New-Object Drawing.Font("Segoe UI", $size)
-  $l.Margin = New-Object Windows.Forms.Padding(0, 0, 0, 14)
+  $l.Font = Get-Font $face $size
+  $l.UseCompatibleTextRendering = $false
+  $l.Margin = New-Object Windows.Forms.Padding(0, 0, 0, $after)
   $panel.Controls.Add($l)
   return $l
 }
 
-# A rounded glass card drawn by hand (WinForms has no rounded buttons): an optional key badge in the
-# choice's own colour, a title and a one-line meaning. Hover lifts it; click or the key runs it.
-$surface = [Drawing.Color]::FromArgb(26, 255, 255, 255)
-$surfaceHover = [Drawing.Color]::FromArgb(44, 255, 255, 255)
+# A rounded glass tile drawn by hand (WinForms has no rounded buttons): a title, a one-line meaning and a
+# key in a small pill at the right. Hover lights it in its own colour; click or the key runs it.
+# "primary" fills it with its colour (the main action of a step); "disabled" waits (see Start-Hold).
+$surface = [Drawing.Color]::FromArgb(20, 255, 255, 255)
+$surfaceHover = [Drawing.Color]::FromArgb(36, 255, 255, 255)
 function New-RoundPath([Drawing.RectangleF]$r, [float]$radius) {
   $p = New-Object Drawing.Drawing2D.GraphicsPath
   $d = $radius * 2
@@ -140,100 +187,165 @@ function New-RoundPath([Drawing.RectangleF]$r, [float]$radius) {
   $p.CloseFigure()
   return $p
 }
-function Add-Card($parent, [int]$w, [int]$h, $title, $hint, $key, $tint, [scriptblock]$onClick, $value = $null) {
+function Add-Card($parent, [int]$w, [int]$h, $title, $hint, $key, $tint, [scriptblock]$onClick, $value = $null, [switch]$Primary) {
   $c = New-Object Windows.Forms.Panel
   $c.Size = New-Object Drawing.Size($w, $h)
-  $c.Margin = New-Object Windows.Forms.Padding(6)
+  $c.Margin = New-Object Windows.Forms.Padding(0, 0, 14, 14)
   $c.BackColor = [Drawing.Color]::Transparent
   $c.Cursor = [Windows.Forms.Cursors]::Hand
   $c.GetType().GetProperty("DoubleBuffered", [Reflection.BindingFlags]"NonPublic,Instance").SetValue($c, $true)
-  $c.Tag = @{ title = $title; hint = $hint; key = $key; tint = $(if ($tint) { $tint } else { $ink }); hover = $false; action = $onClick; value = $value }
+  $c.Tag = @{ title = $title; hint = $hint; key = $key; tint = $(if ($tint) { $tint } else { $ink }); hover = $false; action = $onClick; value = $value; primary = [bool]$Primary; disabled = $false }
   $c.add_Paint({
     param($s, $e)
     $t = $s.Tag
     $g = $e.Graphics
     $g.SmoothingMode = "AntiAlias"
-    $g.TextRenderingHint = "ClearTypeGridFit"
+    $g.TextRenderingHint = "AntiAliasGridFit"
     $rect = New-Object Drawing.RectangleF(1, 1, ($s.Width - 3), ($s.Height - 3))
-    $path = New-RoundPath $rect 18
-    $fill = New-Object Drawing.SolidBrush($(if ($t.hover) { $surfaceHover } else { $surface }))
-    $g.FillPath($fill, $path)
-    $line = New-Object Drawing.Pen($(if ($t.hover) { $t.tint } else { [Drawing.Color]::FromArgb(40, 255, 255, 255) }), 1.5)
-    $g.DrawPath($line, $path)
-    $x = 22
-    if ($t.key) {
-      $badge = New-RoundPath (New-Object Drawing.RectangleF(20, (($s.Height - 44) / 2), 44, 44)) 12
-      $g.FillPath((New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(60, $t.tint))), $badge)
-      $f = New-Object Drawing.Font("Segoe UI Semibold", 17)
-      $sz = $g.MeasureString($t.key, $f)
-      $g.DrawString($t.key, $f, (New-Object Drawing.SolidBrush($t.tint)), (42 - $sz.Width / 2), (($s.Height - $sz.Height) / 2))
-      $x = 80
+    $path = New-RoundPath $rect ([Math]::Min(24, $s.Height / 2 - 2))
+    $lit = $t.hover -and -not $t.disabled
+    if ($t.primary) {
+      $fill = [Drawing.Color]::FromArgb($(if ($t.disabled) { 70 } elseif ($lit) { 255 } else { 225 }), $t.tint)
+      $titleColor = $bg
+      $hintColor = [Drawing.Color]::FromArgb(190, $bg)
+    } else {
+      $fill = $(if ($lit) { $surfaceHover } else { $surface })
+      $titleColor = $(if ($t.disabled) { $dim } else { $ink })
+      $hintColor = $dim
     }
-    $titleFont = New-Object Drawing.Font("Segoe UI Semibold", $(if ($t.hint) { 17 } else { 15 }))
+    $g.FillPath((New-Object Drawing.SolidBrush($fill)), $path)
+    if (-not $t.primary) {
+      $edge = $(if ($lit) { [Drawing.Color]::FromArgb(200, $t.tint) } else { [Drawing.Color]::FromArgb(28, 255, 255, 255) })
+      $g.DrawPath((New-Object Drawing.Pen($edge, 1.5)), $path)
+    }
+    $big = $t.hint -and $s.Height -ge 110
+    if ($big) {
+      # a short bar in the tile's colour, like the phone's choice colours
+      $bar = New-RoundPath (New-Object Drawing.RectangleF(24, 22, 28, 5)) 2.5
+      $g.FillPath((New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(230, $t.tint))), $bar)
+    }
+    $dotted = $t.hint -and -not $big -and -not $t.primary
+    $titleFont = Get-Font $displayBold $(if ($big) { 24 } elseif ($t.hint) { 17 } else { 14.5 })
     $tsz = $g.MeasureString($t.title, $titleFont)
-    $ty = if ($t.hint) { ($s.Height / 2) - $tsz.Height + 4 } else { ($s.Height - $tsz.Height) / 2 }
-    $g.DrawString($t.title, $titleFont, (New-Object Drawing.SolidBrush($ink)), $x, $ty)
-    if ($t.hint) { $g.DrawString($t.hint, (New-Object Drawing.Font("Segoe UI", 10.5)), (New-Object Drawing.SolidBrush($dim)), ($x + 1), (($s.Height / 2) + 4)) }
+    $x = $(if ($dotted) { 42 } else { 22 })
+    if ($dotted) {
+      # a dot in the tile's colour before the title
+      $g.FillEllipse((New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(230, $t.tint))), 24, [float](($s.Height / 2) - ($tsz.Height / 2) - 4), 9, 9)
+    }
+    if ($big) { $ty = $s.Height - $tsz.Height - 46 } elseif ($t.hint) { $ty = ($s.Height / 2) - $tsz.Height + 3 } else { $ty = ($s.Height - $tsz.Height) / 2 }
+    $g.DrawString($t.title, $titleFont, (New-Object Drawing.SolidBrush($titleColor)), $x, $ty)
+    if ($t.hint) {
+      $hf = Get-Font $textFace 11
+      $hy = $(if ($big) { $s.Height - 44 } else { ($s.Height / 2) + 3 })
+      $g.DrawString($t.hint, $hf, (New-Object Drawing.SolidBrush($hintColor)), ($x + 1), $hy)
+    }
+    if ($t.key) {
+      $kf = Get-Font $textFace 11 "Bold"
+      $ksz = $g.MeasureString($t.key, $kf)
+      $kw = [Math]::Max(32, $ksz.Width + 14)
+      $kx = $s.Width - $kw - 18
+      $ky = $(if ($big) { 20 } else { ($s.Height - 30) / 2 })
+      $pill = New-RoundPath (New-Object Drawing.RectangleF($kx, $ky, $kw, 30)) 9
+      $g.FillPath((New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb($(if ($t.primary) { 40 } else { 26 }), $(if ($t.primary) { $bg } else { $ink })))), $pill)
+      $g.DrawString($t.key, $kf, (New-Object Drawing.SolidBrush($(if ($t.primary) { $bg } else { $dim }))), ($kx + ($kw - $ksz.Width) / 2), ($ky + (30 - $ksz.Height) / 2))
+    }
   })
   $c.add_MouseEnter({ $this.Tag.hover = $true; $this.Invalidate() })
   $c.add_MouseLeave({ $this.Tag.hover = $false; $this.Invalidate() })
-  $c.add_Click({ & $this.Tag.action })
+  $c.add_Click({ if (-not $this.Tag.disabled) { & $this.Tag.action } })
   $parent.Controls.Add($c)
   return $c
 }
-# A full-width card for the later steps (kinds of fun, lengths, Save, Back).
-function Add-Button($text, [scriptblock]$onClick, $value = $null) {
-  return Add-Card $panel 684 60 $text $null $null $null $onClick $value
+# A row of tiles (two side by side, or more for kinds and lengths).
+function Add-Row([int]$height) {
+  $row = New-Object Windows.Forms.FlowLayoutPanel
+  $row.Width = 714
+  $row.Height = $height
+  $row.BackColor = [Drawing.Color]::Transparent
+  $row.Margin = New-Object Windows.Forms.Padding(0)
+  $panel.Controls.Add($row)
+  return $row
+}
+# A full-width tile for the later steps.
+function Add-Button($text, [scriptblock]$onClick, $value = $null, $key = $null, $hint = $null, $tint = $null, [switch]$Primary) {
+  return Add-Card $panel 700 $(if ($hint) { 72 } else { 58 }) $text $hint $key $tint $onClick $value -Primary:$Primary
 }
 
 function Clear-Step($step) {
+  $holdTimer.Stop()
+  $breathTimer.Stop()
   $state.step = $step
+  $panel.SuspendLayout()
   $panel.Controls.Clear()
+  $panel.ResumeLayout()
 }
 
 function Close-Gate($choice, $kind = $null, $minutes = 0) {
   $state.answered = $true
   $state.passed = Get-Date
+  $holdTimer.Stop()
+  $breathTimer.Stop()
   $form.Hide()
   Log-Choice $choice $kind $minutes
+}
+
+# What the next thing is (the phone shows the same): the next task, else the paper book's pages left.
+function Get-Context {
+  $i = $state.info
+  if ($i.nextTask) { return "Next: $($i.nextTask)" }
+  if ($i.book -and $i.book.pages) { return "$($i.book.pages - $i.book.progress) pages left in $($i.book.title)" }
+  return $null
 }
 
 # ---------- the steps ----------
 
 function Show-Dial {
   Clear-Step "dial"
-  Add-Text "Why now?" 30 | Out-Null
+  Add-Text "Why now?" 34 $ink $displayBold 6 | Out-Null
+  $ctx = Get-Context
+  Add-Text $(if ($ctx) { $ctx } else { "Pick one. It takes a second." }) 13 $dim $textFace 26 | Out-Null
+  # The phone's slider, side by side: Leisure on the left, Purpose on the right.
+  $top = Add-Row 196
+  Add-Card $top 343 182 "Leisure" "A fact first, then a timer" "$left" $funTint { Show-ReadFirst } | Out-Null
+  Add-Card $top 343 182 "Purpose" "Work, study, something that matters" "$right" $brass { Close-Gate "unlock" } | Out-Null
+  $bottom = Add-Row 80
+  Add-Card $bottom 343 66 "Note" "Jot it down, then go" "N" $noteTint { Show-Write $true } | Out-Null
+  Add-Card $bottom 343 66 "Task" "Add it to today, then go" "T" $taskTint { Show-Write $false } | Out-Null
   $t = $state.info.today
-  if ($t) { Add-Text "Today: $($t.gates) unlocks, $($t.fun) for fun" 12 $dim | Out-Null }
-  Add-Text "Press a key, or click" 11 $dim | Out-Null
-  # Four different choices, each with its own key and colour, two by two.
-  $grid = New-Object Windows.Forms.FlowLayoutPanel
-  $grid.Width = 700
-  $grid.Height = 290
-  $grid.BackColor = [Drawing.Color]::Transparent
-  $grid.Margin = New-Object Windows.Forms.Padding(-6, 6, 0, 0)
-  $panel.Controls.Add($grid)
-  Add-Card $grid 336 130 "Unlock" "Urgent: straight in" "1" $brass { Close-Gate "unlock" } | Out-Null
-  Add-Card $grid 336 130 "Fun" "Your book first, then a timer" "2" $funTint { Show-Suggest } | Out-Null
-  Add-Card $grid 336 130 "Note" "Jot it down, then go" "3" $noteTint { Show-Write $true } | Out-Null
-  Add-Card $grid 336 130 "Task" "Add it to today, then go" "4" $taskTint { Show-Write $false } | Out-Null
+  if ($t) { Add-Text "Today $dot $($t.gates) unlocks $dot $($t.unlock) for purpose $dot $($t.fun) for leisure" 11 $dim $textFace 0 | Out-Null }
 }
 
 function Show-Write([bool]$note) {
   Clear-Step "write"
   $state.note = $note
-  Add-Text $(if ($note) { "Quick note (goes to your Inbox)" } else { "New task for today" }) 22 | Out-Null
+  Add-Text $(if ($note) { "Quick note" } else { "New task for today" }) 30 $ink $displayBold 4 | Out-Null
+  Add-Text $(if ($note) { "It goes to your Inbox (Today $dot Notes)." } else { "It goes on today's list." }) 12 $dim $textFace 18 | Out-Null
+  # A text box inside a rounded field (a plain TextBox cannot be rounded).
+  $field = New-Object Windows.Forms.Panel
+  $field.Size = New-Object Drawing.Size(700, 64)
+  $field.Margin = New-Object Windows.Forms.Padding(0, 0, 0, 16)
+  $field.BackColor = [Drawing.Color]::Transparent
+  $field.add_Paint({
+    param($s, $e)
+    $e.Graphics.SmoothingMode = "AntiAlias"
+    $p = New-RoundPath (New-Object Drawing.RectangleF(1, 1, ($s.Width - 3), ($s.Height - 3))) 18
+    $e.Graphics.FillPath((New-Object Drawing.SolidBrush($fieldBg)), $p)
+    $e.Graphics.DrawPath((New-Object Drawing.Pen([Drawing.Color]::FromArgb(160, $(if ($state.note) { $noteTint } else { $taskTint })), 1.5)), $p)
+  })
   $box = New-Object Windows.Forms.TextBox
-  $box.Width = 684
-  $box.Font = New-Object Drawing.Font("Segoe UI", 15)
-  $box.BackColor = $bg
+  $box.BorderStyle = "None"
+  $box.Font = Get-Font $textFace 16
+  $box.BackColor = $fieldBg
   $box.ForeColor = $ink
-  $box.Margin = New-Object Windows.Forms.Padding(0, 0, 0, 14)
-  $panel.Controls.Add($box)
+  $box.Width = 656
+  $box.Location = New-Object Drawing.Point(22, 18)
+  $field.Controls.Add($box)
+  $panel.Controls.Add($field)
   $state.box = $box
   $box.add_KeyDown({ if ($_.KeyCode -eq "Enter") { $_.SuppressKeyPress = $true; Save-Write } })
-  Add-Button "Save  (Enter)" { Save-Write } | Out-Null
-  Add-Button "Back  (Esc)" { Show-Dial } | Out-Null
+  $row = Add-Row 72
+  Add-Card $row 343 58 "Save" $null "Enter" $(if ($note) { $noteTint } else { $taskTint }) { Save-Write } -Primary | Out-Null
+  Add-Card $row 343 58 "Back" $null "Esc" $null { Show-Dial } | Out-Null
   $box.Focus() | Out-Null
 }
 
@@ -244,31 +356,83 @@ function Save-Write {
   Close-Gate $(if ($state.note) { "note" } else { "task" })
 }
 
-function Show-Suggest {
-  Clear-Step "suggest"
-  Add-Text "Read instead?" 30 | Out-Null
-  $b = $state.info.book
-  if ($b) { Add-Text "$($b.title)$(if ($b.pages) { "`npage $($b.progress) of $($b.pages)" })" | Out-Null }
-  else { Add-Text "10 pages of any book, or just sit with being bored for a minute." | Out-Null }
-  if ($null -ne $state.info.bank) { Add-Text "Game time banked: $($state.info.bank) min. Reading earns more." 12 $dim | Out-Null }
-  Add-Button "Read 10 pages  (locks the PC)" { Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation } | Out-Null
-  Add-Button "Still fun" { Show-Kinds } | Out-Null
+# Leisure: a fact first (as on the phone). "Continue my book" opens the reader instead; "Leisure anyway"
+# opens after a few seconds, so the fact is read, not skipped.
+$holdTimer = New-Object Windows.Forms.Timer
+$holdTimer.Interval = 1000
+$hold = @{ left = 0; card = $null; label = "" }
+$holdTimer.add_Tick({
+  $hold.left--
+  if ($hold.left -le 0) {
+    $holdTimer.Stop()
+    $hold.card.Tag.disabled = $false
+    $hold.card.Tag.title = $hold.label
+  } else { $hold.card.Tag.title = "$($hold.label)  ($($hold.left))" }
+  $hold.card.Invalidate()
+})
+function Start-Hold($card, [int]$seconds) {
+  $hold.card = $card
+  $hold.label = $card.Tag.title
+  $hold.left = $seconds
+  $card.Tag.disabled = $true
+  $card.Tag.title = "$($hold.label)  ($seconds)"
+  $holdTimer.Start()
+}
+
+function Show-ReadFirst {
+  $k = $state.info.knowledge
+  $fact = if ($k -and $k.items) { @($k.items)[0] } else { $null }
+  $book = if ($k) { $k.passage } else { $null }
+  if (-not $fact -and -not $book -and -not $state.info.book) { Show-Kinds; return }
+  Clear-Step "read"
+  $state.fact = $fact
+  if ($fact) {
+    Add-Text "A fact first" 12 $dim $textFace 4 | Out-Null
+    if ($fact.type -eq "recall" -and $fact.q) {
+      Add-Text $fact.q 26 $ink $displayBold 10 | Out-Null
+      Add-Text $fact.a 16 $ink $textFace 10 | Out-Null
+    } else {
+      Add-Text $fact.title 26 $ink $displayBold 10 | Out-Null
+      Add-Text $fact.text 16 $ink $textFace 10 | Out-Null
+    }
+    if ($fact.source) { Add-Text $fact.source 11 $dim $textFace 22 | Out-Null } else { Add-Text "" 4 $dim $textFace 12 | Out-Null }
+  } else {
+    Add-Text "Read first?" 34 $ink $displayBold 22 | Out-Null
+  }
+  if ($book) {
+    $where = if ($book.chapter) { "$($book.title) $dot $($book.chapter)" } else { $book.title }
+    Add-Button "Continue my book" { Log-Fact; Close-Gate "read"; Start-Process "$site/read/" } $null "B" $where $brass -Primary | Out-Null
+  }
+  if ($state.info.book) {
+    Add-Button "Read 10 pages of $($state.info.book.title)" { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation } $null "P" "A paper book: the PC locks while you read" $noteTint | Out-Null
+  }
+  $anyway = Add-Button "Leisure anyway" { Log-Fact; Show-Kinds } $null $left $null $funTint
+  if ($fact) { Start-Hold $anyway ([Math]::Min(12, [Math]::Max(4, [int]($fact.text.Length / 60) * 2 + 2))) }
+  Add-Text "Esc goes back" 10.5 $dim $textFace 0 | Out-Null
 }
 
 function Show-Kinds {
   Clear-Step "kinds"
-  Add-Text "What kind of fun?" 26 | Out-Null
-  foreach ($k in $state.info.fun) { Add-Button $k.label { Show-Length $this.Tag.value } $k.kind | Out-Null }
-  Add-Button "Back  (Esc)" { Show-Dial } | Out-Null
+  Add-Text "What kind of leisure?" 30 $ink $displayBold 22 | Out-Null
+  $row = Add-Row 0
+  $row.AutoSize = $true
+  $row.MaximumSize = New-Object Drawing.Size(714, 0)
+  $n = 1
+  foreach ($k in $state.info.fun) { Add-Card $row 224 72 $k.label $null "$n" $funTint { Show-Length $this.Tag.value } $k.kind | Out-Null; $n++ }
+  Add-Button "Back" { Show-Dial } $null "Esc" | Out-Null
 }
 
 function Show-Length($kind) {
   Clear-Step "length"
-  Add-Text "For how long?" 26 | Out-Null
-  Add-Text "When it runs out, the Gate asks again." 12 $dim | Out-Null
+  Add-Text "For how long?" 30 $ink $displayBold 4 | Out-Null
+  Add-Text "When it runs out, the Gate asks again." 12 $dim $textFace 22 | Out-Null
   $state.funKind = $kind
-  foreach ($m in $state.info.minutes) { Add-Button "$m min" { Start-Pause 5 $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null }
-  Add-Button "Back  (Esc)" { Show-Kinds } | Out-Null
+  $row = Add-Row 0
+  $row.AutoSize = $true
+  $row.MaximumSize = New-Object Drawing.Size(714, 0)
+  $n = 1
+  foreach ($m in $state.info.minutes) { Add-Card $row 224 72 "$m min" $null "$n" $funTint { Start-Pause 5 $state.funKind ([int]$this.Tag.value) $false } ([int]$m) | Out-Null; $n++ }
+  Add-Button "Back" { Show-Kinds } $null "Esc" | Out-Null
 }
 
 function Start-Fun($kind, [int]$minutes, [bool]$extension) {
@@ -282,32 +446,65 @@ function Start-Fun($kind, [int]$minutes, [bool]$extension) {
 function Show-TimeUp {
   Clear-Step "timeup"
   $state.mode = "timeup"
-  Add-Text "Time's up" 30 | Out-Null
-  Add-Text "$($state.funMinutes) min of $($state.funKind)." | Out-Null
-  Add-Button "Done" { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } | Out-Null
-  Add-Button "10 more" { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind 10 $true } | Out-Null
+  Add-Text "Time's up" 34 $ink $displayBold 6 | Out-Null
+  Add-Text "$($state.funMinutes) min of $($state.funKind)." 14 $dim $textFace 24 | Out-Null
+  $row = Add-Row 80
+  Add-Card $row 343 66 "Done" "Back to what matters" "D" $brass { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } -Primary | Out-Null
+  Add-Card $row 343 66 "10 more" "After a longer breath" "M" $funTint { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind 10 $true } | Out-Null
 }
 
-# A short wait before fun starts (5 s), longer for each extension (15 s, then 30 s).
+# A breath before leisure starts (5 s), longer for each extension (15 s, then 30 s): a circle that grows
+# as you breathe in and shrinks as you breathe out (4 s each way).
 $pauseTimer = New-Object Windows.Forms.Timer
 $pauseTimer.Interval = 1000
-$pause = @{ left = 0; kind = ""; minutes = 0; extension = $false; label = $null }
+$pause = @{ left = 0; kind = ""; minutes = 0; extension = $false; label = $null; started = Get-Date; ring = $null }
 $pauseTimer.add_Tick({
   $pause.left--
   if ($pause.left -le 0) { $pauseTimer.Stop(); Start-Fun $pause.kind $pause.minutes $pause.extension; return }
-  $pause.label.Text = "Fun in $($pause.left) s"
+  $pause.label.Text = "Leisure in $($pause.left) s"
 })
+$breathTimer = New-Object Windows.Forms.Timer
+$breathTimer.Interval = 33
+$breathTimer.add_Tick({ if ($pause.ring) { $pause.ring.Invalidate() } })
 function Start-Pause([int]$seconds, $kind, [int]$minutes, [bool]$extension) {
   Clear-Step "pause"
-  Add-Text "Breathe" 30 | Out-Null
   $pause.left = $seconds
   $pause.kind = $kind
   $pause.minutes = $minutes
   $pause.extension = $extension
-  $pause.label = Add-Text "Fun in $seconds s"
-  Add-Button "Never mind" { $pauseTimer.Stop(); if ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } else { Show-Dial } } | Out-Null
+  $pause.started = Get-Date
+  $ring = New-Object Windows.Forms.Panel
+  $ring.Size = New-Object Drawing.Size(700, 260)
+  $ring.BackColor = [Drawing.Color]::Transparent
+  $ring.GetType().GetProperty("DoubleBuffered", [Reflection.BindingFlags]"NonPublic,Instance").SetValue($ring, $true)
+  $ring.add_Paint({
+    param($s, $e)
+    $g = $e.Graphics
+    $g.SmoothingMode = "AntiAlias"
+    $t = ((Get-Date) - $pause.started).TotalSeconds
+    $phase = (1 - [Math]::Cos($t * [Math]::PI / 4)) / 2   # 0..1..0 every 8 s
+    $r = 60 + 60 * $phase
+    $cx = $s.Width / 2
+    $cy = $s.Height / 2
+    $g.FillEllipse((New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](30 + 40 * $phase), $funTint))), [float]($cx - $r), [float]($cy - $r), [float](2 * $r), [float](2 * $r))
+    $g.DrawEllipse((New-Object Drawing.Pen([Drawing.Color]::FromArgb(200, $funTint), 2)), [float]($cx - $r), [float]($cy - $r), [float](2 * $r), [float](2 * $r))
+    $word = $(if ([Math]::Sin($t * [Math]::PI / 4) -ge 0) { "Breathe in" } else { "Breathe out" })
+    $f = Get-Font $display 15
+    $sz = $g.MeasureString($word, $f)
+    $g.DrawString($word, $f, (New-Object Drawing.SolidBrush($ink)), ($cx - $sz.Width / 2), ($cy - $sz.Height / 2))
+  })
+  $panel.Controls.Add($ring)
+  $pause.ring = $ring
+  $pause.label = Add-Text "Leisure in $seconds s" 14 $dim $textFace 20
+  Add-Button "Never mind" { $pauseTimer.Stop(); if ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } else { Show-Dial } } $null "Esc" | Out-Null
   $pauseTimer.Start()
+  $breathTimer.Start()
 }
+
+# Fades in, like the phone's Gate.
+$fadeTimer = New-Object Windows.Forms.Timer
+$fadeTimer.Interval = 15
+$fadeTimer.add_Tick({ if ($form.Opacity -ge 0.99) { $form.Opacity = 1; $fadeTimer.Stop() } else { $form.Opacity = [Math]::Min(1, $form.Opacity + 0.08) } })
 
 function Show-Gate($mode) {
   $state.info = Get-Info
@@ -316,14 +513,38 @@ function Show-Gate($mode) {
   $state.mode = $mode
   $state.answered = $false
   if ($mode -eq "timeup") { Show-TimeUp } else { Show-Dial }
+  $form.Opacity = 0
   $form.Show()
   $form.Activate()
+  $form.Invalidate()
+  $fadeTimer.Start()
 }
 
+# Arrow keys normally move focus between controls; here they choose.
+$form.add_PreviewKeyDown({ if ($_.KeyCode -in @("Left", "Right")) { $_.IsInputKey = $true } })
 $form.add_KeyDown({
-  if ($state.step -eq "dial") {
-    switch ($_.KeyCode) { "D1" { Close-Gate "unlock" } "D2" { Show-Suggest } "D3" { Show-Write $true } "D4" { Show-Write $false } }
-  } elseif ($_.KeyCode -eq "Escape" -and $state.step -ne "pause" -and $state.step -ne "timeup") { Show-Dial }
+  $key = $_.KeyCode
+  switch ($state.step) {
+    "dial" {
+      switch ($key) { { $_ -in "Right", "D1", "NumPad1" } { Close-Gate "unlock" } { $_ -in "Left", "D2", "NumPad2" } { Show-ReadFirst } { $_ -in "N", "D3", "NumPad3" } { Show-Write $true } { $_ -in "T", "D4", "NumPad4" } { Show-Write $false } }
+      return
+    }
+    "read" {
+      $book = $state.info.knowledge.passage
+      if ($key -eq "B" -and $book) { Log-Fact; Close-Gate "read"; Start-Process "$site/read/" }
+      elseif ($key -eq "P" -and $state.info.book) { Log-Fact; Close-Gate "read"; rundll32.exe user32.dll,LockWorkStation }
+      elseif ($key -eq "Left" -and -not $holdTimer.Enabled) { Log-Fact; Show-Kinds }
+    }
+    "kinds" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.fun).Count) { Show-Length @($state.info.fun)[$n].kind } }
+    "length" { $n = [int]"$key".TrimStart("D") - 1; if ("$key" -match "^D[1-9]$" -and $n -lt @($state.info.minutes).Count) { Start-Pause 5 $state.funKind ([int]@($state.info.minutes)[$n]) $false } }
+    "timeup" { if ($key -eq "D") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" } elseif ($key -eq "M") { Start-Pause $(if ($state.ext -eq 0) { 15 } else { 30 }) $state.funKind 10 $true } }
+  }
+  if ($key -eq "Escape" -and $state.step -notin @("dial", "timeup")) {
+    $pauseTimer.Stop()
+    if ($state.step -eq "pause" -and $state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue; Close-Gate "done" }
+    elseif ($state.step -eq "length") { Show-Kinds }
+    else { Show-Dial }
+  }
 })
 # Alt+F4 hides the Gate (counted as a skip); it stays running for the next unlock.
 $form.add_FormClosing({
@@ -334,6 +555,37 @@ $form.add_FormClosing({
     if (-not $state.answered) { if ($state.mode -eq "timeup") { $state.funUntil = [datetime]::MinValue }; Close-Gate "skip" }
   }
 })
+
+# ---------- pictures of each step (-Shot), for checking the design ----------
+if ($Shot) {
+  New-Item -ItemType Directory -Force $Shot | Out-Null
+  $state.info = Get-Info
+  if ($state.info.accent) { $brass = [Drawing.ColorTranslator]::FromHtml($state.info.accent) }
+  $form.WindowState = "Normal"
+  $form.StartPosition = "Manual"
+  $form.TopMost = $false
+  $form.Size = New-Object Drawing.Size(1440, 900)
+  $form.Location = New-Object Drawing.Point(-3000, -3000)  # off screen
+  $form.Show()
+  $snap = {
+    param($name)
+    [Windows.Forms.Application]::DoEvents()
+    & $center
+    $form.Refresh()
+    $bmp = New-Object Drawing.Bitmap($form.Width, $form.Height)
+    $form.DrawToBitmap($bmp, (New-Object Drawing.Rectangle(0, 0, $form.Width, $form.Height)))
+    $bmp.Save((Join-Path $Shot "$name.png"), [Drawing.Imaging.ImageFormat]::Png)
+  }
+  Show-Dial; & $snap "1-dial"
+  Show-ReadFirst; & $snap "2-read-first"
+  Show-Kinds; & $snap "3-kinds"
+  Show-Length "videos"; & $snap "4-length"
+  Start-Pause 5 "videos" 10 $false; $pause.started = (Get-Date).AddSeconds(-4); & $snap "5-breathe"; $pauseTimer.Stop()
+  Show-Write $true; & $snap "6-note"
+  $state.funMinutes = 20; $state.funKind = "videos"; Show-TimeUp; & $snap "7-timeup"
+  $form.Hide()
+  exit 0
+}
 
 # ---------- watching for unlocks ----------
 # Every second: the lock screen (LogonUI) going away means an unlock; a long gap between ticks means the PC
@@ -348,7 +600,10 @@ $watch.add_Tick({
   $unlocked = $state.locked -and -not $locked
   $state.locked = $locked
   if ($unlocked -and $form.Visible) { $form.Activate() }  # prepared while locked: take the keyboard now
-  if ($form.Visible) { return }
+  if ($form.Visible) {
+    if ($now.Second -eq 0) { $form.Invalidate() }  # the clock
+    return
+  }
   $funOn = $state.funUntil -gt $now
   if ($state.funUntil -ne [datetime]::MinValue -and -not $funOn) {
     $state.funUntil = [datetime]::MinValue

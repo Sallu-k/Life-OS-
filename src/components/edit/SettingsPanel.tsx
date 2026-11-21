@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PACKED, packInfo, refreshPack, type PackInfo } from "@/lib/pack";
 import { api, getServerUrls, getToken, setServerUrls, setToken, useIsApp, useServer } from "@/lib/api";
 import { connectToPc } from "@/lib/connect";
 import { feel } from "@/lib/feel/sounds";
@@ -94,6 +95,7 @@ export function SettingsPanel() {
         {app && <ExactReminders />}
         {app && <PhoneScreenTime />}
         {app && <WidgetButton />}
+        {app && <OfflinePack />}
         {app && <AppVersion />}
         {(app || (server && !server.local)) && (
           <details className="manual-connect">
@@ -258,6 +260,44 @@ function PhoneScreenTime() {
           Allow usage access
         </button>
       )}
+    </div>
+  );
+}
+
+// Phone app: what is saved on the phone for offline use (src/lib/pack.ts), and a button to update it now.
+function OfflinePack() {
+  const [info, setInfo] = useState<PackInfo | null>(null);
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    const show = () => setInfo(packInfo());
+    show();
+    window.addEventListener(PACKED, show);
+    return () => window.removeEventListener(PACKED, show);
+  }, []);
+  async function update() {
+    setMsg("Downloading…");
+    try {
+      const next = await refreshPack(true);
+      if (next) setInfo(next);
+      setMsg(next ? "Up to date." : "Not now: the PC is not reachable, or changes are still being sent. Try again in a minute.");
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+  const when = info && new Date(info.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return (
+    <div className="flex flex-col gap-2 border-t border-ink-dim/15 pt-4">
+      <p className="text-ink-dim">
+        {info
+          ? `Saved on this phone for offline use: ${info.days} days, the plan, reviews, money, notes, knowledge and ${info.reads} long reads (updated ${when}).`
+          : "Nothing saved for offline use yet. It downloads by itself when the PC is reachable."}
+      </p>
+      <div className="flex items-center gap-3">
+        <button type="button" className="chip w-fit" onClick={update}>
+          Update now
+        </button>
+        {msg && <span className="text-ink-dim">{msg}</span>}
+      </div>
     </div>
   );
 }

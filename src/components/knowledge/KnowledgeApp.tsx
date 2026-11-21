@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useIsApp, useServer } from "@/lib/api";
 import { feel } from "@/lib/feel/sounds";
 import { readKept } from "@/lib/offline";
-import type { Library, Session } from "@/lib/knowledge";
+import { logEvent, resumeAt, type Card, type Library, type Session } from "@/lib/knowledge";
 import { Fold } from "@/components/today/Fold";
 import { LongReads } from "./LongReads";
 import { ReviewFlow } from "./ReviewFlow";
@@ -37,8 +37,10 @@ export function KnowledgeApp() {
     return <p className="card p-5 text-sm text-ink-dim">Knowledge works through the LifeOS server. On the PC run npm start and open the address it prints.</p>;
   if (!lib) return <p className="text-ink-dim">{error || "Loading…"}</p>;
 
-  const items = session ? [...session.items, ...(session.passage ? [session.passage] : [])] : [];
+  // Books are read in the reader now (/read/), so the review is cards only.
+  const items = session ? session.items : [];
   const s = lib.stats;
+  const book = lib.books.find((b) => b.current) ?? lib.books.find((b) => b.position < b.total) ?? null;
   const facts = [
     `${s.known} of ${s.cards} cards known`,
     s.due ? `${s.due} due` : null,
@@ -49,6 +51,8 @@ export function KnowledgeApp() {
   return (
     <div className="flex flex-col gap-6">
       {offline && <p className="text-xs text-ink-dim">Offline: showing what this phone saw last. What you read is sent when the PC answers.</p>}
+      <Fact cards={items} onDone={() => setTimeout(load, 600)} />
+      {book && <ContinueBook book={book} />}
       <section className="card flex flex-col gap-3 p-4 sm:p-5">
         <h2 className="font-serif text-xl text-ink">Today&apos;s review</h2>
         <p className="text-sm text-ink-dim">{facts.join(" · ")}</p>
@@ -90,6 +94,58 @@ export function KnowledgeApp() {
         ))}
       </div>
     </div>
+  );
+}
+
+// The page opens on one fact: read it ("Got it" logs it, so spacing brings it back later) or see another.
+function Fact({ cards, onDone }: { cards: Card[]; onDone(): void }) {
+  const [at, setAt] = useState(0);
+  const facts = cards.filter((c) => c.type === "card");
+  const c = facts[at % Math.max(1, facts.length)];
+  if (!c) return null;
+  return (
+    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-label="A fact">
+      <p className="text-xs text-ink-dim">A fact · {deckName(c.deck)}</p>
+      <h2 className="font-serif text-xl text-ink">{c.title}</h2>
+      <p className="reading-text">{c.text}</p>
+      {c.source && <p className="text-xs text-ink-dim opacity-70">{c.source}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="chip edit-primary" onClick={() => (logEvent({ kind: "read", id: c.id }), feel("markDone"), setAt(at + 1), onDone())}>
+          Got it
+        </button>
+        {facts.length > 1 && (
+          <button type="button" className="chip" onClick={() => (feel("select"), setAt(at + 1))}>
+            Another fact
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// The book you are reading: where you are, and the way into the reader.
+function ContinueBook({ book }: { book: Library["books"][number] }) {
+  const at = resumeAt(book.slug, book.position);
+  const chapter = [...(book.chapters ?? [])].reverse().find((c) => c.index <= at);
+  const percent = book.total ? Math.floor((100 * at) / book.total) : 0;
+  return (
+    <section className="card flex flex-col gap-3 p-4 sm:p-5" aria-label="Continue reading">
+      <p className="text-xs text-ink-dim">Your book</p>
+      <div className="flex flex-wrap items-baseline gap-x-3">
+        <h2 className="font-serif text-xl text-ink">{book.title}</h2>
+        {book.author && <span className="text-sm text-ink-dim">{book.author}</span>}
+      </div>
+      <div className="progress-track" aria-label={`${percent}% read`}>
+        <div className="progress-fill" style={{ width: `${percent}%` }} />
+      </div>
+      <p className="text-xs text-ink-dim">
+        {chapter ? `${chapter.title} · ` : ""}
+        {percent}% read
+      </p>
+      <a className="chip edit-primary self-start" href={`/read/?book=${book.slug}`} onClick={() => feel("open")}>
+        {at ? "Continue reading" : "Start reading"}
+      </a>
+    </section>
   );
 }
 

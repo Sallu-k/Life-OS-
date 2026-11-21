@@ -37,6 +37,57 @@ function put(key: string, value: unknown): void {
   }
 }
 
+// The offline pack (src/lib/pack.ts): every day and long read, kept in IndexedDB, which has room for far
+// more than localStorage (about 5 MB). Read only when the PC cannot be reached.
+let db: Promise<IDBDatabase> | null = null;
+function openPack(): Promise<IDBDatabase> {
+  db ??= new Promise((ok, fail) => {
+    const r = indexedDB.open("lifeos-offline", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("pack");
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => fail(r.error);
+  });
+  db.catch(() => (db = null)); // try again next time
+  return db;
+}
+export async function packGet<T>(key: string): Promise<T | null> {
+  try {
+    const store = (await openPack()).transaction("pack").objectStore("pack");
+    return await new Promise((ok) => {
+      const r = store.get(key);
+      r.onsuccess = () => ok((r.result as T | undefined) ?? null);
+      r.onerror = () => ok(null);
+    });
+  } catch {
+    return null;
+  }
+}
+// Replaces the whole pack at once (all or nothing).
+export async function packReplace(entries: Record<string, unknown>): Promise<void> {
+  const tx = (await openPack()).transaction("pack", "readwrite");
+  const store = tx.objectStore("pack");
+  store.clear();
+  for (const [key, value] of Object.entries(entries)) store.put(value, key);
+  await new Promise<void>((ok, fail) => {
+    tx.oncomplete = () => ok();
+    tx.onerror = tx.onabort = () => fail(tx.error ?? new Error("Could not save on this phone"));
+  });
+}
+export const packDay = (date: string) => packGet<Day>(`day:${date}`);
+
+// Day copies in localStorage, apart from the last day seen. After a fresh pack they are older than the
+// pack's copies, so they are dropped (only when nothing is waiting to be sent).
+export function dropOldDays(): void {
+  try {
+    const last = get<string>(LAST);
+    for (const key of Object.keys(localStorage)) if (key.startsWith("lifeos-day:") && key !== DAY(last ?? "")) localStorage.removeItem(key);
+  } catch {
+    // storage blocked: nothing to drop
+  }
+}
+// Small copies (settings, habit list, reviews...) go to localStorage, where readKept looks for them.
+export const keepCopy = (path: string, data: unknown) => put(`lifeos-kept:${path}`, data);
+
 export const cachedDay = (date: string) => get<Day>(DAY(date));
 export const saveDay = (day: Day) => {
   put(DAY(day.date), day);
@@ -64,7 +115,8 @@ export function blankDay(date: string): Day | null {
     missed: {},
     habits: known.habits.map((h) => {
       const days = !h.days || h.days === "daily" ? null : Array.isArray(h.days) ? h.days : h.days === "weekdays" ? ["mon", "tue", "wed", "thu", "fri"] : h.days === "weekends" ? ["sat", "sun"] : String(h.days).split(",");
-      return { ...h, state: null, due: !days || days.map((d) => d.trim().slice(0, 3)).includes(week) };
+      // A new day starts empty: no mark, no amount, no ticked parts (they belong to the day they came from).
+      return { ...h, state: null, amount: null, partStates: {}, due: !days || days.map((d) => d.trim().slice(0, 3)).includes(week) };
     }),
     tasks: [],
     carried: known.carried.filter((t) => t.date < date),
@@ -136,7 +188,7 @@ export async function loadDay(date: string): Promise<{ day: Day | null; online: 
     return { day: outbox().length ? (cachedDay(date) ?? day) : day, online: true };
   } catch (e) {
     if (!isOffline(e)) throw e;
-    return { day: cachedDay(date) ?? blankDay(date), online: false };
+    return { day: cachedDay(date) ?? (await packDay(date)) ?? blankDay(date), online: false };
   }
 }
 

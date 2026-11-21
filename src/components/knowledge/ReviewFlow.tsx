@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { feel } from "@/lib/feel/sounds";
 import { logEvent, passageId, type Card, type Passage } from "@/lib/knowledge";
+import { Prose } from "./Prose";
 
 // One thing at a time: a card to read, a question to recall (answer hidden until you ask), or a passage.
 // Recall beats re-reading, so a due card with a question is asked, not shown.
@@ -33,7 +34,9 @@ export function ReviewFlow({ items, onDone }: { items: (Card | Passage)[]; onDon
         <p className="text-sm text-ink-dim">
           {item.title} · part {item.index + 1} of {item.total}
         </p>
-        <p className="reading-text">{item.text}</p>
+        <div className="reading-text">
+          <Prose text={item.text} />
+        </div>
         <button type="button" className="chip edit-primary self-start" onClick={() => next({ kind: "passage", id: passageId(item) })}>
           Done reading
         </button>

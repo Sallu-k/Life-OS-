@@ -194,7 +194,7 @@ final class GateOverlay {
         if (choice == GateDial.PURPOSE) {
             GateService.allowUnder();
             finishWith("unlock", null, 0);
-        } else readFirst(false);
+        } else readFirst();
     }
 
     /** A task pass in a work-and-fun app (Brave) ran out with the app still open. */
@@ -207,39 +207,52 @@ final class GateOverlay {
             finishWith("unlock", null, 0);
         }));
         col.addView(button("Task done", () -> turnedBack("done", "Good work.")));
-        col.addView(button("It's leisure now", () -> readFirst(false)));
+        col.addView(button("It's leisure now", () -> readFirst()));
         show(col, false);
     }
 
     // ---------- Leisure: read a little first ----------
 
-    /** One thing to read: the next passage of your long read, or a card (a recall question when it is due).
-     *  "Done" opens after a few seconds per line, so it is read, not skipped. Nothing cached: straight on. */
-    private void readFirst(boolean cardOnly) {
-        JSONObject it = GateStore.nextReading(ctx, cardOnly);
+    /** A fact first (a recall question when one is due); "Done" opens after a few seconds per line, so it
+     *  is read, not skipped. Under it, "Continue my book" opens the book reader in LifeOS instead.
+     *  Nothing cached: the book alone, or straight on. */
+    private void readFirst() {
+        JSONObject it = GateStore.nextReading(ctx, true);
         if (it == null) {
-            suggest();
+            if (!bookOnly()) suggest();
             return;
         }
-        String type = it.optString("type");
-        if ("passage".equals(type)) passage(it);
-        else if ("recall".equals(type) && !it.optString("q").isEmpty()) recall(it);
+        if ("recall".equals(it.optString("type")) && !it.optString("q").isEmpty()) recall(it);
         else card(it, true);
     }
 
-    private void passage(JSONObject p) {
+    /** The book being read (the next part the server offers), or null. */
+    private JSONObject book() {
+        JSONObject k = GateStore.info(ctx).optJSONObject("knowledge");
+        return k != null ? k.optJSONObject("passage") : null;
+    }
+
+    /** "Continue my book": counts as taking the reading suggestion, and LifeOS opens at the reader. */
+    private void bookButton(LinearLayout col) {
+        JSONObject p = book();
+        if (p == null) return;
+        String where = p.optString("chapter", "");
+        col.addView(small(p.optString("title") + (where.isEmpty() || "null".equals(where) ? "" : " · " + where)));
+        col.addView(button("Continue my book", () -> {
+            finishWith("read", null, 0);
+            open(new Intent(ctx, MainActivity.class).putExtra(MainActivity.EXTRA_PAGE, "/read/"));
+        }));
+    }
+
+    /** No fact cached, but a book: offer it, or move on. */
+    private boolean bookOnly() {
+        if (book() == null) return false;
         LinearLayout col = column();
-        col.addView(title("Read first"));
-        col.addView(small(p.optString("title") + " · part " + (p.optInt("index") + 1) + " of " + p.optInt("total")));
-        col.addView(reading(p.optString("text")), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
-        Button done = button("Done reading", () -> {
-            GateStore.readDone(ctx, "passage", GateStore.passageId(p), true);
-            suggest();
-        });
-        col.addView(done);
-        col.addView(button("Something else", () -> readFirst(true)));
+        col.addView(title("Read first?"));
+        bookButton(col);
+        col.addView(button("Not now", this::suggest));
         show(col, false);
-        holdUntilRead(done, p.optString("text"));
+        return true;
     }
 
     private void card(JSONObject c, boolean log) {
@@ -252,6 +265,7 @@ final class GateOverlay {
             suggest();
         });
         col.addView(done);
+        bookButton(col);
         show(col, false);
         holdUntilRead(done, c.optString("text"));
     }
@@ -291,6 +305,7 @@ final class GateOverlay {
         });
         col.addView(reveal);
         col.addView(row);
+        bookButton(col);
         show(col, false);
     }
 

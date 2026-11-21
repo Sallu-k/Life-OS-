@@ -10,7 +10,7 @@ import { appendFileSync, createReadStream, createWriteStream, existsSync, mkdirS
 import { createServer } from "node:http";
 import { homedir, networkInterfaces } from "node:os";
 import { extname, join, resolve, sep } from "node:path";
-import { createGzip } from "node:zlib";
+import { createGzip, gzipSync } from "node:zlib";
 import { COLLECTIONS } from "./lib/collections.mjs";
 import { addTask, capture, editTask, getDay, readHabits, readNotes, recordSleep, tasksIn, updateDay, writeHabits } from "./lib/days.mjs";
 import { getPlan, readGoals, saveGoals } from "./lib/plan.mjs";
@@ -28,6 +28,7 @@ import { publish, siteRoot } from "./lib/site.mjs";
 import { siteManifest, zipFiles } from "./lib/appBundle.mjs";
 import { signManifest } from "./lib/updateKey.mjs";
 import { loadEnvLocal, vaultRoot } from "./lib/vault-write.mjs";
+import { offlinePack } from "./lib/offlinePack.mjs";
 
 loadEnvLocal();
 if (!process.env.LIFEOS_TOKEN) {
@@ -277,6 +278,13 @@ async function api(req, res, parts) {
     res.writeHead(200, { "Content-Type": "application/zip", "Content-Length": zip.length, "Cache-Control": "no-store" });
     return res.end(zip);
   }
+  // Everything the app can show, in one answer, kept on the phone for when the PC is away (src/lib/pack.ts).
+  if (name === "app" && slug === "offline" && method === "GET") {
+    const body = JSON.stringify(offlinePack(localToday()));
+    if (!/\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""))) return res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" }).end(body);
+    const zipped = gzipSync(body); // ~3 MB of JSON becomes ~0.1 MB over Wi-Fi
+    return res.writeHead(200, { "Content-Type": "application/json", "Content-Encoding": "gzip", "Content-Length": zipped.length, "Cache-Control": "no-store" }).end(zipped);
+  }
   // ---------- weekly review (private answers, like the journal) ----------
   if (name === "review" && method === "GET") return json(res, 200, getReview(slug && slug !== "current" ? slug : weekOf(localToday()).id));
   if (name === "review" && method === "PUT" && slug) return json(res, 200, saveReview(slug, await readBody(req)));
@@ -369,8 +377,9 @@ async function api(req, res, parts) {
     return json(res, 200, { ...library(localToday()), reading });
   }
   if (name === "knowledge" && method === "GET" && slug === "read" && parts[2]) {
-    const n = Number(new URL(req.url || "/", "http://x").searchParams.get("n") || 5);
-    return json(res, 200, { passages: passages(parts[2], n) });
+    const query = new URL(req.url || "/", "http://x").searchParams;
+    const from = query.has("from") ? Number(query.get("from")) : null;
+    return json(res, 200, { passages: passages(parts[2], Number(query.get("n") || 5), 40, Number.isInteger(from) ? from : null) });
   }
   if (name === "knowledge" && method === "POST" && slug === "log") {
     const body = await readBody(req, 256 * 1024);

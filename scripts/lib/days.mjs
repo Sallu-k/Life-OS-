@@ -309,7 +309,21 @@ export function closeFinishedDays() {
   }
 }
 
+// The offline pack reads hundreds of days at once: it lists the books once (~60 ms each time) and reads
+// each day's tasks once (every day looks at the 14 before it). Safe because the pack runs in one go,
+// with no other request in between.
+let once = null;
+export function readOnce(run) {
+  once = { books: readingBooks(), tasks: new Map() };
+  try {
+    return run();
+  } finally {
+    once = null;
+  }
+}
+
 function readingBooks() {
+  if (once) return once.books;
   try {
     return listItems("books")
       .filter((b) => b.status === "reading")
@@ -342,7 +356,9 @@ function carriedTasks(date) {
   for (const f of readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort()) {
     const d = f.slice(0, 10);
     if (d < since || d >= date) continue;
-    tasksOf(parse(readFileSync(join(dir, f), "utf8"))).forEach((t, index) => !t.done && out.push({ ...t, index, date: d }));
+    const tasks = once?.tasks.get(f) ?? tasksOf(parse(readFileSync(join(dir, f), "utf8")));
+    once?.tasks.set(f, tasks);
+    tasks.forEach((t, index) => !t.done && out.push({ ...t, index, date: d }));
   }
   return out;
 }

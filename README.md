@@ -46,7 +46,7 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
 **The Gate** (optional): a pause before the screen
 - After every phone unlock (and PC sign-in or unlock) a calm screen asks "Why now?": slide right for
   **Purpose** (something needs doing, no questions) or left for **Leisure**; **Note** and **Task** are buttons.
-  Leisure first asks you to read a little (see Knowledge), then offers your book, then a breathing pause
+  Leisure first shows a fact (see Knowledge) with "Continue my book", which opens the book reader, then a breathing pause
   that grows each time you start the same fun again that day, then a session that runs out and asks
   again. Opening a watched app (e.g. a video app) without choosing Fun brings it back. Every choice is
   logged (choice and minutes only, never text) and shows up in Insights ("you turned back 36% of the time").
@@ -56,11 +56,19 @@ No account, no cloud, no database, no analytics. Nothing leaves your machine unl
 **Knowledge** (read a little, remember it, keep going)
 - Cards in your vault (`Knowledge/Cards/*.md`: a title, a few lines, a source, optionally a question and
   answer) and whole books read a passage at a time (`Knowledge/Reading/<book>/`).
-- Before leisure the Gate shows one thing: the next passage of your current book, or a card. Cards with a
+- Before leisure the Gate shows a fact (a card), with "Continue my book" to read instead. Cards with a
   question come back as recall ("Show answer", then Knew it / Not yet) on a spaced schedule (1, 3, 7, 16, 35,
   90 days), worked out from a plain log in `Logs/Knowledge/`.
-- The Knowledge page: today's review, long reads with progress, "Save a line" from the book you are reading
-  (it comes back later as a card), and every deck. Shown live only, never built into pages.
+- **The book reader** (`/read/`): your long read in pages, like an e-reader. Tap or swipe to turn, chapters in a
+  contents list, three looks (Night, Sepia, Paper) and text sizes; your place is saved as you read.
+- The Knowledge page opens on a fact and your book, then today's review, long reads with progress, "Save a
+  line" from the book you are reading (it comes back later as a card), and every deck. Shown live only,
+  never built into pages.
+
+**Offline on the phone**
+- When the phone reaches the PC it downloads everything it can show (every day, the plan, reviews, notes,
+  knowledge and the next parts of your book) and keeps it, so pages work away from home. Changes made offline
+  are sent later. Settings shows what is saved, with "Update now".
 - Inspired by research on friction before distracting apps (e.g. [one sec](https://one-sec.app), a CHI 2024
   field study). It uses no Accessibility service, so payment and bank apps keep working.
 
@@ -176,6 +184,8 @@ npm run import-games -- games.json
 npm run add-knowledge -- wiki "Transistor" "Euclid"  # one card per topic (Wikipedia summary)
 npm run add-knowledge -- gutenberg 2680           # a public-domain book as a long read
 npm run add-knowledge -- epub "book.epub"         # your own EPUB, section by section
+npm run add-knowledge -- text "book.md"           # Markdown with "## " chapters (title/author in frontmatter)
+npm run add-knowledge -- article "https://..."    # a web article, cleaned to its paragraphs
 ```
 
 ## Commands

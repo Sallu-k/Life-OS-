@@ -7,7 +7,7 @@
 // Spacing (testing effect + spacing): a card read or recalled moves up a box; each box waits longer
 // (1, 3, 7, 16, 35, 90 days); "not yet" sends it back to box 1. All state is worked out from the log.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import matter from "gray-matter";
 import { backup } from "./days.mjs";
@@ -87,25 +87,55 @@ export function frontMatter(text) {
 }
 
 // Long reads: each book's passages in order (files 001.md, 002.md…, passages split by a "---" line).
+// A passage starting with a "## Title" line begins a chapter (scripts/add-knowledge.mjs writes them):
+// `chapterOf[i]` is passage i's chapter, `chapters` the list with each one's first passage.
+// Kept until a file changes (a few whole books are several MB, read on every Gate sync otherwise).
+let cached = { key: "", books: [] };
 export function readings() {
   const dir = join(root(), "Reading");
   if (!existsSync(dir)) return [];
-  return readdirSync(dir, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && /^[a-z0-9-]+$/.test(d.name))
+  const folders = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && /^[a-z0-9-]+$/.test(d.name));
+  const key = folders.map((d) => listMd(join(dir, d.name)).map((f) => `${d.name}/${f}:${statSync(join(dir, d.name, f)).mtimeMs}`).join("|")).join("||");
+  if (key === cached.key) return cached.books;
+  const books = folders
     .map((d) => {
       const base = join(dir, d.name);
       const info = existsSync(join(base, "index.md")) ? matter(readFileSync(join(base, "index.md"), "utf8")).data : {};
-      const passages = listMd(base)
+      const parts = listMd(base)
         .filter((f) => f !== "index.md")
         .flatMap((f) => readFileSync(join(base, f), "utf8").split(/^---\s*$/m))
         .map((p) => p.replace(/\[Illustration[^\]]*\]/g, "").trim()) // picture captions from scanned books
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((p) => {
+          const heading = /^## (.+)\r?\n/.exec(p);
+          return heading ? { text: p.slice(heading[0].length).trim(), starts: heading[1].trim() } : { text: p, starts: null };
+        });
       // Skip front matter at the start (title page, contents, credits): it reads badly as a passage.
-      while (passages.length > 1 && frontMatter(passages[0])) passages.shift();
-      return { slug: d.name, title: String(info.title ?? d.name), author: info.author ? String(info.author) : null, source: info.source ? String(info.source) : null, passages };
+      while (parts.length > 1 && !parts[0].starts && frontMatter(parts[0].text)) parts.shift();
+      const chapters = [];
+      const chapterOf = parts.map((p, index) => {
+        if (p.starts) chapters.push({ title: p.starts, index });
+        return chapters.length ? chapters[chapters.length - 1].title : null;
+      });
+      return { slug: d.name, title: String(info.title ?? d.name), author: info.author ? String(info.author) : null, source: info.source ? String(info.source) : null, passages: parts.map((p) => p.text), chapterOf, chapters };
     })
     .filter((b) => b.passages.length);
+  cached = { key, books };
+  return books;
 }
+
+// One passage as the app and the Gate get it.
+const passageOf = (book, index) => ({
+  type: "passage",
+  book: book.slug,
+  title: book.title,
+  author: book.author,
+  index,
+  total: book.passages.length,
+  text: book.passages[index],
+  chapter: book.chapterOf[index],
+  chapterStart: book.chapters.some((c) => c.index === index),
+});
 
 // ---------- the log ----------
 
@@ -202,16 +232,18 @@ export function session(today, n = 3) {
   }
   const book = books.find((b) => b.slug === current);
   const at = book ? (pos[book.slug] ?? 0) : 0;
-  const passage = book && at < book.passages.length ? { type: "passage", book: book.slug, title: book.title, author: book.author, index: at, total: book.passages.length, text: book.passages[at] } : null;
+  const passage = book && at < book.passages.length ? passageOf(book, at) : null;
   return { items, passage };
 }
 
-// Several passages in a row from one book (the Knowledge page's "Continue reading").
-export function passages(slug, count = 5) {
+// Several passages in a row from one book: from where you are, or from `from` (the reader going back, or
+// opening a chapter).
+export function passages(slug, count = 5, max = 20, from = null) {
   const book = readings().find((b) => b.slug === slug);
   if (!book) throw new Error("knowledge: no such long read");
-  const at = readingStates(readLog(), [book]).pos[slug] ?? 0;
-  return book.passages.slice(at, at + Math.max(1, Math.min(20, count))).map((text, i) => ({ type: "passage", book: slug, title: book.title, author: book.author, index: at + i, total: book.passages.length, text }));
+  const at = Number.isInteger(from) ? Math.max(0, Math.min(book.passages.length, from)) : (readingStates(readLog(), [book]).pos[slug] ?? 0);
+  const n = Math.max(1, Math.min(max, count));
+  return book.passages.slice(at, at + n).map((_, i) => passageOf(book, at + i));
 }
 
 export function library(today) {
@@ -238,7 +270,7 @@ export function library(today) {
   const weekAgo = addDays(today, -7);
   return {
     decks,
-    books: books.map((b) => ({ slug: b.slug, title: b.title, author: b.author, source: b.source, position: pos[b.slug] ?? 0, total: b.passages.length, current: b.slug === current })),
+    books: books.map((b) => ({ slug: b.slug, title: b.title, author: b.author, source: b.source, position: pos[b.slug] ?? 0, total: b.passages.length, current: b.slug === current, chapters: b.chapters })),
     stats: {
       cards: cards.length,
       known: Object.values(states).filter((s) => s.box >= 3).length,

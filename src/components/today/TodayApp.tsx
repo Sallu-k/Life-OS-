@@ -142,12 +142,23 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
     if (server || app) load();
   }, [server, app, load]);
   // Catch up when the app comes back to the front, and every 30 s while changes are waiting.
+  // After midnight, a page that was showing today moves on to the new day (the app can stay open overnight).
+  const todayWas = useRef(localToday());
+  const newDay = useCallback(() => {
+    const now = localToday();
+    if (now === todayWas.current) return false;
+    const was = todayWas.current;
+    todayWas.current = now;
+    if (date !== was) return false; // looking at another day on purpose: stay there
+    setDate(now);
+    return true;
+  }, [date]);
   useEffect(() => {
-    const onShow = () => document.visibilityState === "visible" && load();
+    const onShow = () => document.visibilityState === "visible" && !newDay() && load();
     document.addEventListener("visibilitychange", onShow);
-    const timer = setInterval(() => outbox().length && load(), 30_000);
+    const timer = setInterval(() => !newDay() && outbox().length && load(), 30_000);
     return () => (document.removeEventListener("visibilitychange", onShow), clearInterval(timer));
-  }, [load]);
+  }, [load, newDay]);
   useReminders(!app && date === localToday() ? day : null, place);
 
   if (!app && server === null) return <p className="text-ink-dim">Connecting…</p>;
@@ -242,7 +253,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
         ))}
       </div>
       {tab === "tasks" && <PlanApp tasksOnly />}
-      {tab === "notes" && <NotesTab />}
+      {tab === "notes" && <NotesTab day={day} readOnly={readOnly} onSave={save} />}
       {tab === "today" && (
         <>
       <div className="today-bar">
