@@ -32,8 +32,9 @@ import java.util.Map;
  *  - Opening a watched app (e.g. YouTube) without a fun session: shows the Gate for that app. Which app is
  *    in front comes from Android's usage record (Usage access), checked every second while the screen is on.
  *  - A fun session that runs out while the screen is on: shows "Time's up".
- *  - An app for both work and fun (Brave): Purpose lets it through for 10 minutes; still in front after
- *    that, the Gate asks "Still for the task?".
+ *  - A watched app (YouTube, Brave...): Purpose costs one fact (5 s, none repeating within 10)
+ *    and lets it through for 10 minutes; still in front after that, the Gate asks "Still for the task?".
+ *  - At night an Urgent pass keeps every Gate away while the phone is in use; 5 minutes away ends it.
  * The Gate is drawn on top of everything (GateOverlay). Needs "Display over other apps" and Usage access; turned on from
  * Settings in the app (DevicePlugin.gateEnable), and started again after a restart (GateBoot).
  */
@@ -57,6 +58,7 @@ public class GateService extends Service {
                 onUnlock();
             } else if (Intent.ACTION_SCREEN_OFF.equals(a)) {
                 allowed.clear();
+                GateStore.urgentAway(GateService.this);
                 if (overlay != null) overlay.screenOff();
                 handler.removeCallbacks(poll);
             } else if (Intent.ACTION_SCREEN_ON.equals(a)) watchApps();
@@ -189,6 +191,7 @@ public class GateService extends Service {
 
     private void gateFor(String pkg) {
         if (!GateStore.phoneOn(this) || !GateStore.watched(this, pkg) || GateStore.funActive(this)) return;
+        if (GateStore.isNight(this) && GateStore.urgentActive(this)) return; // an urgent pass covers every app while in use
         Long until = allowed.get(pkg);
         if (until != null && until > System.currentTimeMillis()) return;
         allowed.remove(pkg);
@@ -197,6 +200,7 @@ public class GateService extends Service {
 
     private void onUnlock() {
         if (!GateStore.phoneOn(this) || GateStore.inGrace(this) || GateStore.funActive(this) || busy()) return;
+        GateStore.urgentCheck(this); // ends after 5 minutes away
         if (GateStore.isNight(this) && GateStore.urgentActive(this)) return; // an urgent pass at night
         show(GateOverlay.MODE_UNLOCK, null);
     }
@@ -250,12 +254,18 @@ public class GateService extends Service {
         if (left > 0) s.handler.postDelayed(s.timeUp, left);
     }
 
-    /** Purpose: let the app under the Gate through until the screen goes off (an app for both work and
-     *  fun only for 10 minutes, then the Gate asks again). */
+    /** Purpose: let the app under the Gate through until the screen goes off (a watched app, like YouTube
+     *  or Brave, only for 10 minutes, then the Gate asks again). */
     static void allowUnder() {
         GateService s = running;
         if (s == null || s.lastApp.isEmpty()) return;
-        boolean dual = GateStore.dual(s, s.lastApp);
-        s.allowed.put(s.lastApp, dual ? System.currentTimeMillis() + 10 * 60_000L : Long.MAX_VALUE);
+        boolean watched = GateStore.watched(s, s.lastApp);
+        s.allowed.put(s.lastApp, watched ? System.currentTimeMillis() + 10 * 60_000L : Long.MAX_VALUE);
+    }
+
+    /** The app under the Gate is a watched one (YouTube, Brave...): its Purpose needs a short read first. */
+    static String watchedUnder() {
+        GateService s = running;
+        return s != null && !s.lastApp.isEmpty() && GateStore.watched(s, s.lastApp) ? s.lastApp : null;
     }
 }

@@ -22,20 +22,23 @@ import { TodaySummary } from "./TodaySummary";
 import { HabitManager } from "./HabitManager";
 import { markSeen, reactFun, reactMark, reactSaved, reactTask, type FeelContext } from "./reactions";
 import { NotesTab } from "./NotesTab";
+import { FoodTab } from "./FoodTab";
 import { PlanApp } from "@/components/plan/PlanApp";
 import { Incentives } from "./Incentives";
 import { SecondDate } from "./SecondDate";
 import { localToday, shift, type Day, type Mark, type Task } from "./types";
 import { useReminders } from "./useReminders";
 
-type Tab = "today" | "tasks" | "notes";
+type Tab = "today" | "tasks" | "food" | "notes";
 const TABS: [Tab, string][] = [
   ["today", "Today"],
   ["tasks", "Tasks"],
+  ["food", "Food"],
   ["notes", "Notes"],
 ];
 
-// The Today screen, in three tabs: Today (summary, habits, the day's cards), Tasks (every open task) and Notes.
+// The Today screen, in four tabs: Today (summary, habits, the day's cards), Tasks (every open task), Food
+// (what was eaten: protein and calories) and Notes.
 // Changes are applied on screen at once, kept on the device and sent to the LifeOS server (lib/offline.ts),
 // so the phone app keeps working without the PC and catches up when it can reach it again.
 // `game` comes from the build; when the PC answers, its current setting wins.
@@ -55,7 +58,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [setup, setSetup] = useState(false);
-  // Three tabs: Today (summary and habits), Tasks (every open task, deadlines first), Notes (by date).
+  // Four tabs: Today (summary and habits), Tasks (every open task, deadlines first), Food, Notes (by date).
   const [tab, setTab] = useState<Tab>("today");
   useEffect(() => {
     try {
@@ -252,7 +255,10 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
           </button>
         ))}
       </div>
+      {/* key={tab}: each tab change replays the panel's short fade-and-slide (globals.css .tab-panel) */}
+      <div key={tab} className="tab-panel flex flex-col gap-6" role="tabpanel">
       {tab === "tasks" && <PlanApp tasksOnly />}
+      {tab === "food" && <FoodTab day={day} readOnly={readOnly} onSave={save} />}
       {tab === "notes" && <NotesTab day={day} readOnly={readOnly} onSave={save} />}
       {tab === "today" && (
         <>
@@ -311,7 +317,8 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
           )}
         </>
       )}
-      {setup && <HabitManager onClose={(saved) => (setSetup(false), saved && load())} />}
+      </div>
+      {setup &&<HabitManager onClose={(saved) => (setSetup(false), saved && load())} />}
     </div>
   );
 }

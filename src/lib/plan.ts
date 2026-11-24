@@ -169,7 +169,9 @@ export function groupTasks(plan: Pick<Plan, "tasks" | "overdue" | "someday">, co
     seen.add(key);
     return !t.done || t.date === today; // today's done tasks stay visible (struck through)
   });
-  const order = (t: Task) => `${span(t.date)?.[1] ?? "9999"}${isDay(t.date) ? "0" : "1"}${t.time ?? "99"}`;
+  // Oldest first, then (like Tasks.org) higher priority first within the same day, then by time.
+  const rank = (t: Task) => (t.priority ? { high: 0, medium: 1, low: 3 }[t.priority] : 2);
+  const order = (t: Task) => `${span(t.date)?.[1] ?? "9999"}${isDay(t.date) ? "0" : "1"}${rank(t)}${t.time ?? "99"}`;
   all.sort((a, b) => order(a).localeCompare(order(b)));
   const started = (t: Task) => !t.start || t.start <= today;
   const groups: TaskGroup[] = [];

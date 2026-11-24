@@ -73,6 +73,9 @@ export interface Day {
   journal: string;
   keep: string;
   fun: string[];
+  food?: { meal: string; id: string; qty: number }[]; // "## Food" (private: shown live only)
+  protein?: number | null; // the day's totals, worked out by the server
+  kcal?: number | null;
 }
 
 export const MARKS: { mark: Mark; icon: string; label: string }[] = [

@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { backup, getDay } from "./days.mjs";
-import { session } from "./knowledge.mjs";
+import { factPool, session } from "./knowledge.mjs";
 import { listItems } from "./notes.mjs";
 import { getRewards } from "./rewards.mjs";
 import { readSettings } from "./settings.mjs";
@@ -152,7 +152,10 @@ const asLine = (t) => (t ? `${t.time ? `${t.time} ` : ""}${t.text}`.slice(0, 80)
 
 function knowledgeOf(today) {
   try {
-    return session(today, 4);
+    // Facts and the book; `facts` feeds the phone Gate's 5 s Purpose read.
+    const k = session(today, 4);
+    if (k) k.facts = factPool(today);
+    return k;
   } catch {
     return null;
   }

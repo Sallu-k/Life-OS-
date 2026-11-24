@@ -11,6 +11,8 @@ import { getItem, getSection, listItems, setSection, updateItem } from "./notes.
 import { slugify, today, vaultRoot } from "./vault-write.mjs";
 import { changeTime, checkRecordChange, isFuture, lockTime, MISSED_REASONS, stamp } from "./dayRules.mjs";
 import { pcHours } from "./usage.mjs";
+import { readFoods } from "./foods.mjs";
+import { MEALS, totals } from "../../src/lib/nutrition.ts"; // shared with the app (Node runs .ts directly)
 import { cleanTask, nextRepeat, parseTasks, taskLines, weekId, weekMonday } from "./tasks.mjs";
 
 const WEEK = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -227,6 +229,18 @@ function journalOf(note) {
   return { journal: body, keep };
 }
 
+// "## Food": what was eaten, one line each: "- lunch 1.5 rice-plate" (meal, portions, food id from
+// _system/foods.md). Private like the journal: only the live Food tab shows it.
+const FOOD_LINE = /^\s*[-*+]\s+([a-z]+)\s+(\d+(?:\.\d+)?)\s+([a-z0-9][a-z0-9-]{0,59})\s*$/;
+function foodOf(note) {
+  const out = [];
+  for (const line of getSection(note.content, "Food").split(/\r?\n/)) {
+    const m = FOOD_LINE.exec(line);
+    if (m && MEALS.includes(m[1])) out.push({ meal: m[1], id: m[3], qty: Number(m[2]) });
+  }
+  return out;
+}
+
 const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
 // "HH:MM", or null. YAML reads an unquoted 23:10 as the number 1390 (base 60), so that is turned back.
 const hhmm = (v) => {
@@ -278,6 +292,9 @@ export function getDay(date) {
     pages: num(note.data.pages_read),
     journal,
     keep,
+    food: foodOf(note),
+    protein: num(note.data.protein_g),
+    kcal: num(note.data.kcal),
     fun: getSection(note.content, "Fun").split(/\r?\n/).map((l) => l.replace(/^\s*[-*+]\s+/, "").trim()).filter((l) => l && !l.startsWith("<!--")),
   };
 }
@@ -366,7 +383,7 @@ function carriedTasks(date) {
 // Applies changes to a day: { habits: {id: state|null}, missed: {id: reason|null}, mood, sleep, productivity,
 // screenTime, pages, journal, keep, fun: [..], finish: true } plus `at` (when it was done on the device) and
 // `unlock` (the owner unlocked a finished day to change it).
-const RECORD_KEYS = ["habits", "parts", "amounts", "missed", "mood", "sleep", "productivity", "screenTime", "pages", "journal", "keep", "fun", "finish"];
+const RECORD_KEYS = ["habits", "parts", "amounts", "missed", "mood", "sleep", "productivity", "screenTime", "pages", "journal", "keep", "fun", "food", "finish"];
 export function updateDay(date, changes) {
   const note = readDay(date);
   const at = changeTime(changes.at);
@@ -471,6 +488,23 @@ export function updateDay(date, changes) {
   if (changes.finish === true && !note.data.finished) {
     note.data.finished = at;
     closeScreenTime(note.data, date);
+  }
+  // Food: the whole list for the day; the totals go in the frontmatter (Insights and the weekly review read only those).
+  if ("food" in changes) {
+    if (!Array.isArray(changes.food) || changes.food.length > 100) throw new Error("food: must be a list");
+    const known = new Set(readFoods().map((f) => f.id));
+    const food = changes.food.map((e) => {
+      const qty = Number(e?.qty);
+      if (!MEALS.includes(e?.meal)) throw new Error(`food: meal must be one of ${MEALS.join(", ")}`);
+      if (!known.has(e?.id)) throw new Error(`food: unknown food "${String(e?.id).slice(0, 20)}"`);
+      if (!Number.isFinite(qty) || qty < 0.5 || qty > 20 || qty * 2 !== Math.round(qty * 2)) throw new Error("food: portions from 0.5 to 20, in halves");
+      return { meal: e.meal, id: e.id, qty };
+    });
+    note.content = setSection(note.content, "Food", food.map((e) => `- ${e.meal} ${e.qty} ${e.id}`).join("\n"));
+    const sum = totals(food, readFoods());
+    note.data.protein_g = food.length ? sum.protein : undefined;
+    note.data.kcal = food.length ? sum.kcal : undefined;
+    if (food.length) mark("food");
   }
   if ("fun" in changes) mark("fun");
   if ("journal" in changes || "keep" in changes) mark("journal");

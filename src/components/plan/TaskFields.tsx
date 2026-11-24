@@ -100,10 +100,10 @@ export function TaskFields({ draft, set, steps = true }: { draft: Draft; set(d: 
         <label className="edit-field">
           <span>Priority</span>
           <select className="today-input" value={draft.priority} onChange={(e) => set({ priority: e.target.value })}>
-            <option value="">None</option>
-            <option value="high">⏫ High</option>
-            <option value="medium">🔼 Medium</option>
-            <option value="low">🔽 Low</option>
+            <option value="">None · reminds once</option>
+            <option value="high">⏫ High · every 30 min until done</option>
+            <option value="medium">🔼 Medium · every 2 h until done</option>
+            <option value="low">🔽 Low · reminds once</option>
           </select>
         </label>
         {draft.date !== SOMEDAY && <RepeatPicker value={draft.repeat} onChange={(repeat) => set({ repeat })} />}
@@ -119,7 +119,7 @@ export function TaskFields({ draft, set, steps = true }: { draft: Draft; set(d: 
           </label>
         )}
         <label className="flex items-center gap-2">
-          <input type="checkbox" className="h-4 w-4 accent-[var(--brass)]" checked={draft.nag} onChange={(e) => set({ nag: e.target.checked })} />🔔 Keep reminding (every 15 min, 4 times)
+          <input type="checkbox" className="h-4 w-4 accent-[var(--brass)]" checked={draft.nag} onChange={(e) => set({ nag: e.target.checked })} />🔔 Keep reminding (every 15 min until done)
         </label>
       </div>
       <label className="edit-field">

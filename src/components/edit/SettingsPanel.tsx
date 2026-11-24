@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PACKED, packInfo, refreshPack, type PackInfo } from "@/lib/pack";
-import { api, getServerUrls, getToken, setServerUrls, setToken, useIsApp, useServer } from "@/lib/api";
+import { api, getServerUrl, getServerUrls, getToken, setServerUrls, setToken, useIsApp, useServer } from "@/lib/api";
 import { connectToPc } from "@/lib/connect";
 import { feel } from "@/lib/feel/sounds";
 import { appVersion, applyUpdate, checkForUpdate } from "@/lib/liveUpdate";
@@ -10,6 +10,7 @@ import { flush } from "@/lib/offline";
 import { openUsageSettings, pinWidget, usageAccess } from "@/lib/device";
 import { DaySettings } from "./DaySettings";
 import { RewardSettings } from "./RewardSettings";
+import { NutritionSettings } from "./NutritionSettings";
 import { GateSettings } from "./GateSettings";
 import { LookSettings } from "./LookSettings";
 import { ReadingGoal } from "./ReadingGoal";
@@ -88,7 +89,7 @@ export function SettingsPanel() {
               Connect to my PC
             </button>
             <span className="text-ink-dim" role="status">
-              {check || (getServerUrls()[0] ? `PC: ${getServerUrls()[0]}` : "")}
+              {check || (getServerUrl() ? `PC: ${getServerUrl()}` : "")}
             </span>
           </div>
         )}
@@ -125,6 +126,7 @@ export function SettingsPanel() {
       {canEdit && <LookSettings />}
       {canEdit && <GateSettings />}
       {canEdit && <RewardSettings />}
+      {canEdit && <NutritionSettings />}
       {canEdit && <ReadingGoal />}
       {server && server.local && !app && <BackupSettings />}
       {canEdit && typeof server.game === "boolean" && <GameSwitch on={server.game} />}

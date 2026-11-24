@@ -2,7 +2,9 @@
 
 // Real reminders on the Android app (they ring even when the app is closed), rebuilt every time Today or
 // Plan loads, for the next 7 days: each habit at its reminder time; each open task at its time (or anchor),
-// else 08:00 on its day, nagging every 15 min when asked (🔔); deadlines (⚑) also the evening before; week
+// else 08:00 on its day. Like Tasks.org, a task's priority sets how it keeps reminding until it is done
+// (RHYTHM: high every 30 min and it cannot be swiped away, medium every 2 h, 🔔 every 15 min; overdue ones
+// too), up to the night lock, on one notification that rings again (TaskNag on the phone); deadlines (⚑) also the evening before; week
 // and month tasks near the end of their week/month; start dates (🛫); one evening nudge for open and
 // overdue tasks; a nightly "log your day". Task and habit reminders have Done and Snooze buttons
 // (handled in lib/notificationActions.ts).
@@ -11,10 +13,15 @@ import type { Day, Task } from "@/components/today/types";
 import { isApp } from "./api";
 import { cachedPlan, isDay, placeLabel, span } from "./plan";
 import { keptCopy } from "./offline";
+import { setTaskNags, type TaskNag } from "./device";
 
 const MORNING = "08:00";
 const DEADLINE_EVE = "20:00";
 const NUDGE = "20:30";
+// How often a task rings again until it is done (minutes), by priority; 🔔 (nag) beats priority. Low and
+// no priority ring once. High ones also stay on screen until Done or Snooze.
+export const RHYTHM: Record<string, number> = { high: 30, medium: 120, nag: 15 };
+const BEFORE = 15; // a timed high-priority task also rings this many minutes before
 // The evening routine counts back from the bedtime target (Settings, "Bedtime and rewards"):
 // log the day 90 min before, the wind-down habit 60 min before, "lights out" 15 min before.
 const ROUTINE = { log: 90, windDown: 60, lightsOut: 15 };
@@ -161,7 +168,17 @@ async function schedule(today: Day, place?: DaySetup): Promise<string> {
   const end = addDays(today.date, 7);
   const open = today.tasks.filter((t) => !t.done);
   const days = (plan?.tasks ?? []).filter((t) => !t.done && isDay(t.date) && t.date > today.date && t.date <= end);
-  for (const t of [...open, ...days]) taskReminders(t, add, place);
+  const overdue = plan ? [...plan.overdue, ...plan.tasks].filter((t) => !t.done && (span(t.date)?.[1] ?? "9999") < today.date) : today.carried;
+  // Tasks with a rhythm ring on the phone's own reminders (TaskNag) when the app has them; else as before.
+  const nags = [...open, ...days].map((t) => nagOf(t, t.date, false, place)).filter((n): n is TaskNag => n !== null);
+  for (const day of [today.date, addDays(today.date, 1)])
+    for (const t of overdue) {
+      const n = nagOf(t, day, true, place);
+      if (n) nags.push(n);
+    }
+  const native = await setTaskNags(nags);
+  const ringing = new Set(native ? nags.map((n) => `${n.date}|${n.text}`) : []);
+  for (const t of [...open, ...days]) taskReminders(t, add, place, ringing.has(`${t.date}|${t.text}`));
   // Week and month tasks: a nudge near the end (Friday 18:00, or three days before the month ends).
   for (const t of (plan?.tasks ?? []).filter((x) => !x.done && !isDay(x.date))) {
     const last = span(t.date)?.[1];
@@ -178,7 +195,6 @@ async function schedule(today: Day, place?: DaySetup): Promise<string> {
     add(key, at(t.start, MORNING), `Starts today: ${t.text}`, placeLabel(t.date, t.start), { kind: "task", date: t.date, text: t.text, key });
   }
 
-  const overdue = plan ? [...plan.overdue, ...plan.tasks].filter((t) => !t.done && (span(t.date)?.[1] ?? "9999") < today.date) : today.carried;
   const stillOpen = open.length + overdue.length;
   if (stillOpen > 0)
     add(
@@ -198,7 +214,8 @@ async function schedule(today: Day, place?: DaySetup): Promise<string> {
 
 // A task's reminders: at its time (its own, or at its anchor), else 08:00 on its day; a deadline also
 // 20:00 the day before; "keep reminding" (🔔) every 15 minutes, four more times. Not before its start date.
-function taskReminders(t: Task, add: (key: string, when: Date, title: string, body: string, extra?: Extra) => void, place?: DaySetup) {
+// `ringing`: the phone rings it on its rhythm (nagOf), so only the "before" and deadline-eve ones are added.
+function taskReminders(t: Task, add: (key: string, when: Date, title: string, body: string, extra?: Extra) => void, place: DaySetup | undefined, ringing: boolean) {
   if (t.start && t.start > t.date) return;
   const key = `task-${t.date}-${t.text}`;
   const extra: Extra = { kind: "task", date: t.date, text: t.text, key };
@@ -206,7 +223,32 @@ function taskReminders(t: Task, add: (key: string, when: Date, title: string, bo
   const when = at(t.date, time ?? MORNING);
   const title = time ? `${t.deadline ? "Deadline" : "Task"}: ${t.text}` : `${t.deadline ? "Deadline today" : "Today"}: ${t.text}`;
   const body = time ? `Due now (${time})` : t.deadline ? "Last day to get it done" : "Planned for today";
-  add(key, when, title, body, extra);
-  if (t.nag) for (let i = 1; i <= 4; i++) add(`${key}-nag${i}`, new Date(when.getTime() + i * 15 * 60_000), title, `Reminder ${i + 1} of 5 · ${body}`, extra);
+  if (!ringing) {
+    add(key, when, title, body, extra);
+    if (t.nag) for (let i = 1; i <= 4; i++) add(`${key}-nag${i}`, new Date(when.getTime() + i * 15 * 60_000), title, `Reminder ${i + 1} of 5 · ${body}`, extra);
+  }
+  if (time && t.priority === "high") add(`${key}-before`, new Date(when.getTime() - BEFORE * 60_000), `In ${BEFORE} min: ${t.text}`, `High priority, due at ${time}`, { ...extra, key: `${key}-before` });
   if (t.deadline) add(`${key}-eve`, at(addDays(t.date, -1), DEADLINE_EVE), `Due tomorrow: ${t.text}`, time ? `By ${time} tomorrow` : "Deadline is tomorrow", { ...extra, key: `${key}-eve` });
+}
+
+// The night lock (Settings › Night lock) ends each day's rhythm; 22:30 before the first sync, 23:00 when off.
+function nightOn(day: string): Date {
+  const night = keptCopy<{ gate?: { night?: { from?: string } | null } }>("settings")?.gate?.night;
+  const from = night === null ? "23:00" : /^\d{2}:\d{2}$/.test(night?.from ?? "") ? night!.from! : "22:30";
+  return at(from < "12:00" ? addDays(day, 1) : day, from);
+}
+
+// A task that keeps ringing on `day` until done (TaskNag), or null when its priority rings only once.
+// Overdue tasks ring from the morning of `day`; the rest from their time (or 08:00) on their own day.
+function nagOf(t: Task, day: string, overdue: boolean, place?: DaySetup): TaskNag | null {
+  const every = t.nag ? RHYTHM.nag : t.priority ? RHYTHM[t.priority] : undefined;
+  if (!every || (t.start && t.start > day)) return null;
+  const time = overdue ? null : taskTime(t, t.date, place);
+  const first = at(day, time ?? MORNING).getTime();
+  const until = nightOn(day).getTime();
+  if (first >= until) return null;
+  const how = every >= 60 ? `every ${every / 60} h` : `every ${every} min`;
+  const lead = t.priority === "high" ? "Important" : t.deadline ? "Deadline" : "Task";
+  const when = overdue ? `Overdue (${placeLabel(t.date, day)})` : time ? `Due ${time}` : t.deadline ? "Last day to get it done" : "Planned for today";
+  return { key: `nag-${day}-${t.date}-${t.text}`, date: t.date, text: t.text, title: `${lead}: ${t.text}`, body: `${when} · ${how} until done`, priority: t.priority ?? null, first, every, until, sticky: t.priority === "high" };
 }

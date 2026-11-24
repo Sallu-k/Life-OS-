@@ -23,6 +23,7 @@
   --surface-hi: #2a2a2e;
   --brass: var(--accent); /* "brass" is the accent token every component uses */
   --copper: #9a9aa2;
+  --prio-high: #f0a24a; /* high-priority tasks: warm amber, never red */
   --glow: var(--accent); /* hover, focus and active states */
   --hex-line: var(--accent);
   --ink: #f2f2f4;
@@ -53,6 +54,7 @@
     --surface: #ffffff;
     --surface-hi: #e6e7ec;
     --copper: #6b6d76;
+    --prio-high: #b8650f;
     --ink: #121317;
     --ink-dim: #5d606b;
     --home-library: #a5791f;
@@ -1364,6 +1366,18 @@ dialog.viewer::backdrop {
 .feel-enter {
   animation: feel-enter 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+/* Today's tabs: the new panel fades in while sliding up a little. "backwards" leaves no transform behind
+   once it ends (a transform would trap position: fixed children such as the sync badge). */
+.tab-panel {
+  animation: tab-panel-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+@keyframes tab-panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel { animation: feel-fade-in 0.15s ease-out backwards; }
+}
 @keyframes feel-enter {
   from { opacity: 0; transform: translateY(-6px) scale(0.98); }
   to { opacity: 1; transform: none; }
@@ -2007,6 +2021,24 @@ input[type="checkbox"] {
   align-items: center;
   gap: 0.5rem 0.75rem;
 }
+/* Priority (Tasks.org-style): a short bar before the checkbox. Warm for high, the accent for medium, dim for low. */
+.plan-row[data-priority] {
+  position: relative;
+}
+.plan-row[data-priority]::before {
+  content: "";
+  position: absolute;
+  left: -0.6rem;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--prio, transparent);
+}
+.plan-row[data-priority="high"] { --prio: var(--prio-high); }
+.plan-row[data-priority="medium"] { --prio: var(--accent); }
+.plan-row[data-priority="low"] { --prio: color-mix(in srgb, var(--ink-dim) 60%, transparent); }
+.plan-row[data-priority="high"] .task-check { accent-color: var(--prio-high); }
 .plan-row > div:first-of-type {
   flex: 1 1 7rem; /* the text keeps at least this much; the buttons wrap below only when needed */
 }
@@ -2561,10 +2593,10 @@ input[type="checkbox"] {
   }
 }
 
-/* Today's three tabs: a segmented control (Today · Tasks · Notes). */
+/* Today's four tabs: a segmented control (Today · Tasks · Food · Notes). */
 .today-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.25rem;
   padding: 0.25rem;
   border-radius: 999px;

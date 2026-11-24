@@ -27,6 +27,7 @@ interface Review {
     strongest: string | null;
     needsCare: string | null;
     knowledge?: { cards: number; knew: number; notyet: number; passages: number };
+    food?: { days: number; protein: number; kcal: number; target: number; reached: number } | null; // Today's Food tab totals
     pc?: { days: number; hours: number; top: { app: string; hours: number }[]; lateMin: number } | null; // StayFree (scripts/lib/pclog.mjs)
     gate?: { gates: number; unlock: number; fun: number; read: number; more: number; funMinutes: number; urgentBefore: number };
   };
@@ -125,6 +126,11 @@ export function WeeklyReview() {
             <p className="text-sm text-ink-dim">
               Knowledge: <span className="text-ink">{s.knowledge.cards}</span> cards, {s.knowledge.passages} passages read
               {s.knowledge.knew + s.knowledge.notyet > 0 && `, recalled ${s.knowledge.knew} of ${s.knowledge.knew + s.knowledge.notyet}`}.
+            </p>
+          )}
+          {s.food && (
+            <p className="text-sm text-ink-dim">
+              Food: <span className="text-ink">{s.food.protein} g protein</span> and {s.food.kcal} kcal a day on {s.food.days} logged days; the protein target ({s.food.target} g) reached on {s.food.reached}.
             </p>
           )}
           {s.pc && (

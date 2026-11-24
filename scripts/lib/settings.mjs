@@ -100,6 +100,14 @@ function cleanNight(n) {
   };
 }
 
+// Food (Build 26): body weight in kg and the daily targets (null = worked out from the weight,
+// src/lib/nutrition.ts `targets`).
+function cleanNutrition(n) {
+  const x = n && typeof n === "object" ? n : {};
+  const v = (k, lo, hi) => (x[k] !== null && x[k] !== "" && Number.isFinite(Number(x[k])) && Number(x[k]) >= lo && Number(x[k]) <= hi ? Math.round(Number(x[k]) * 10) / 10 : null);
+  return { weight: v("weight", 30, 250), protein: v("protein", 10, 400), kcal: v("kcal", 500, 6000) };
+}
+
 // The look: the accent colour picked on the PC ("#3d7cf4"), or null for the default. The phone app uses
 // its wallpaper's colour instead (Material You).
 const cleanTheme = (t) => ({ accent: t && /^#[0-9a-fA-F]{6}$/.test(t.accent ?? "") ? t.accent.toLowerCase() : null });
@@ -114,6 +122,7 @@ export function readSettings() {
     sleep: cleanSleep(data.sleep),
     rewards: cleanRewards(data.rewards),
     gate: cleanGate(data.gate),
+    nutrition: cleanNutrition(data.nutrition),
     theme: cleanTheme(data.theme),
     money: cleanMoney(data.money),
   };
@@ -132,6 +141,7 @@ export function writeSettings(changes) {
   if (changes.theme && typeof changes.theme === "object") data.theme = cleanTheme(changes.theme);
   if (changes.gate && typeof changes.gate === "object") data.gate = cleanGate({ ...cleanGate(data.gate), ...changes.gate });
   if (changes.rewards && typeof changes.rewards === "object") data.rewards = cleanRewards({ ...cleanRewards(data.rewards), ...changes.rewards });
+  if (changes.nutrition && typeof changes.nutrition === "object") data.nutrition = cleanNutrition({ ...cleanNutrition(data.nutrition), ...changes.nutrition });
   if (changes.money && typeof changes.money === "object") data.money = cleanMoney(changes.money);
   backup(file());
   mkdirSync(dirname(file()), { recursive: true });

@@ -181,13 +181,86 @@ final class GateStore {
         return ((minuteOfDay(from) - nowMinute()) % (24 * 60) + 24 * 60) % (24 * 60);
     }
 
-    /** An urgent pass at night: the unlock Gate stays away for these minutes (leisure apps still meet it). */
-    static void allowUrgent(Context c, int minutes) {
-        prefs(c).edit().putLong("urgent_until", System.currentTimeMillis() + minutes * 60_000L).apply();
+    /** An urgent pass at night: no Gate at all (unlock or apps) while the phone is in use; it ends when the
+     *  phone has been away (screen off) for URGENT_AWAY, or when the night ends. */
+    static final long URGENT_AWAY = 5 * 60_000L;
+
+    static void allowUrgent(Context c) {
+        long now = System.currentTimeMillis();
+        prefs(c).edit().putBoolean("urgent_on", true).putLong("urgent_seen", now)
+            .putInt("urgent_count", urgentCount(c) + 1).putLong("urgent_last", now).apply();
+    }
+
+    /** Reading before an Urgent pass: 15 s the first time in a night, 30 s the second, then a minute. */
+    static int urgentSeconds(Context c) {
+        int n = urgentCount(c);
+        return n == 0 ? 15 : n == 1 ? 30 : 60;
+    }
+
+    /** Urgent passes tonight (a pass more than 12 hours ago was another night). */
+    private static int urgentCount(Context c) {
+        boolean tonight = System.currentTimeMillis() - prefs(c).getLong("urgent_last", 0) < 12 * 3_600_000L;
+        return tonight ? prefs(c).getInt("urgent_count", 0) : 0;
     }
 
     static boolean urgentActive(Context c) {
-        return prefs(c).getLong("urgent_until", 0) > System.currentTimeMillis();
+        return prefs(c).getBoolean("urgent_on", false);
+    }
+
+    /** The screen went off: the 5 minutes away start now. */
+    static void urgentAway(Context c) {
+        if (urgentActive(c)) prefs(c).edit().putLong("urgent_seen", System.currentTimeMillis()).apply();
+    }
+
+    /** At unlock: ends the pass if the phone was away long enough, or the night is over. */
+    static void urgentCheck(Context c) {
+        if (!urgentActive(c)) return;
+        boolean away = System.currentTimeMillis() - prefs(c).getLong("urgent_seen", 0) >= URGENT_AWAY;
+        if (away || !isNight(c)) prefs(c).edit().putBoolean("urgent_on", false).apply();
+    }
+
+    // ---------- Purpose in a watched app (YouTube, Brave...): one fact, then 10 minutes ----------
+
+    private static final int FACT_GAP = 10; // a fact comes back only after 10 others
+
+    /** The next fact for a Purpose read: one not among the last 10 shown, else the one shown longest ago. */
+    static JSONObject nextFact(Context c) {
+        JSONObject k = info(c).optJSONObject("knowledge");
+        JSONArray pool = k == null ? null : k.optJSONArray("facts");
+        if (pool == null || pool.length() == 0) return null;
+        JSONArray recent = recentFacts(c);
+        JSONObject best = null;
+        int bestAt = Integer.MAX_VALUE;
+        for (int i = 0; i < pool.length(); i++) {
+            JSONObject f = pool.optJSONObject(i);
+            if (f == null || f.optString("text").isEmpty()) continue;
+            int at = -1;
+            for (int j = 0; j < recent.length(); j++) if (recent.optString(j).equals(f.optString("id"))) at = j;
+            if (at < 0) return f; // not seen lately
+            if (at < bestAt) {
+                bestAt = at;
+                best = f;
+            }
+        }
+        return best;
+    }
+
+    /** Remembers a fact as shown (the last 10, oldest first). */
+    static void factShown(Context c, String id) {
+        JSONArray recent = recentFacts(c), kept = new JSONArray();
+        for (int i = 0; i < recent.length(); i++) if (!recent.optString(i).equals(id)) kept.put(recent.optString(i));
+        kept.put(id);
+        JSONArray last = new JSONArray();
+        for (int i = Math.max(0, kept.length() - FACT_GAP); i < kept.length(); i++) last.put(kept.optString(i));
+        prefs(c).edit().putString("facts_recent", last.toString()).apply();
+    }
+
+    private static JSONArray recentFacts(Context c) {
+        try {
+            return new JSONArray(prefs(c).getString("facts_recent", "[]"));
+        } catch (Exception e) {
+            return new JSONArray();
+        }
     }
 
     static void passed(Context c) {
@@ -352,12 +425,21 @@ final class GateStore {
     /** Ticks your one thing (POST /api/task/done, found by its text) and drops it from the cached list,
      *  so the Gate shows the next one at once. Sent with the Gate's own queue. */
     static synchronized void taskDone(Context c, JSONObject t) {
+        tickTask(c, t.optString("date"), t.optString("text"));
+    }
+
+    /** Ticks a task by its day and text (the Gate's one thing, or a reminder's Done) and drops it from the
+     *  cached top tasks. */
+    static synchronized void tickTask(Context c, String date, String text) {
         try {
-            enqueue(c, "task/done", new JSONObject().put("date", t.optString("date")).put("matchText", t.optString("text")));
+            enqueue(c, "task/done", new JSONObject().put("date", date).put("matchText", text));
             JSONObject info = info(c);
             JSONArray top = info.optJSONArray("topTasks");
             JSONArray rest = new JSONArray();
-            for (int i = 1; top != null && i < top.length(); i++) rest.put(top.get(i));
+            for (int i = 0; top != null && i < top.length(); i++) {
+                JSONObject x = top.optJSONObject(i);
+                if (x != null && !(text.equals(x.optString("text")) && date.equals(x.optString("date")))) rest.put(x);
+            }
             info.put("topTasks", rest);
             info.put("nextTask", rest.length() > 0 ? rest.getJSONObject(0).optString("text") : "");
             prefs(c).edit().putString("info", info.toString()).apply();

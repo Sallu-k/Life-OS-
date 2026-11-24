@@ -23,8 +23,8 @@ function amount(value: unknown, key: string, rel: string, warnings: string[]): n
 }
 const KEEP = /^\s*>\s*keep:\s*(.*)$/i;
 
-// Reads Daily/YYYY-MM-DD.md notes. PRIVACY: only habit states, "> keep:" lines, the three frontmatter
-// numbers and the "## Fun" list leave this function.
+// Reads Daily/YYYY-MM-DD.md notes. PRIVACY: only habit states, "> keep:" lines, the frontmatter
+// numbers (incl. the Food tab's protein total, never the "## Food" list) and the "## Fun" list leave this function.
 // The journal text is never returned, stored or logged.
 export function loadDaily(habits: HabitDefinition[]): LoadResult<DailyRecord> {
   const dir = path.join(vaultRoot(), "Daily");
@@ -69,6 +69,7 @@ export function loadDaily(habits: HabitDefinition[]): LoadResult<DailyRecord> {
       sleep: amount(parsed.data.sleep_hours, "sleep_hours", rel, warnings),
       bedtime: clock(parsed.data.bedtime),
       boredMin: amount(parsed.data.bored_min, "bored_min", rel, warnings),
+      protein: amount(parsed.data.protein_g, "protein_g", rel, warnings),
       missed: reasons(parsed.data.missed),
     });
   }

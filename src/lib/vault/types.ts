@@ -107,6 +107,7 @@ export interface DailyRecord {
   sleep: number | null; // hours slept
   bedtime: string | null; // "HH:MM" went to sleep that evening (measured by the phone)
   boredMin: number | null; // longest phone-free stretch 08:00-22:00, minutes (measured by the phone)
+  protein: number | null; // grams eaten that day (the Food tab's total; never which foods)
   missed: Record<string, string>; // habit id -> reason it was not done (tired, busy, ...)
 }
 

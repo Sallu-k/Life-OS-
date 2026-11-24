@@ -181,6 +181,17 @@ public class DevicePlugin extends Plugin {
         }
     }
 
+    /** Task reminders that ring again until done (TaskNag): the whole list, replaced each time. */
+    @PluginMethod
+    public void setTaskNags(PluginCall call) {
+        try {
+            TaskNag.set(getContext(), call.getArray("tasks", new JSArray()));
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject(ex.getMessage());
+        }
+    }
+
     /** Task ticks made on the widget that have not reached the PC yet; the app sends them itself. */
     @PluginMethod
     public void takeTaskTicks(PluginCall call) {

@@ -4,7 +4,7 @@
 // the app opens and when it comes back to the front (at most every 5 minutes). When an update has been
 // downloaded, a "lifeos-update-ready" event lets the page offer a restart; otherwise it shows on the
 // next launch by itself.
-import { getServerUrl, getToken, isApp, loadBundledPc } from "./api";
+import { getServerUrl, getServerUrls, getToken, isApp, loadBundledPc } from "./api";
 
 interface LiveUpdate {
   check(o: { url: string; token: string }): Promise<{ updated: boolean; version: string; downloaded?: number }>;
@@ -35,9 +35,20 @@ export async function checkForUpdate(force = false): Promise<string> {
   running = true;
   try {
     await loadBundledPc();
-    const url = getServerUrl();
-    if (!url) return "No PC address yet.";
-    const r = await withPlugin((p) => p.check({ url, token: getToken() }));
+    const first = getServerUrl();
+    if (!first) return "No PC address yet.";
+    // Every known address, the last good one first: an old address (the PC got a new one) must not block updates.
+    let r: Awaited<ReturnType<LiveUpdate["check"]>> | null = null;
+    let error: unknown = null;
+    for (const url of [first, ...getServerUrls().filter((u) => u !== first)]) {
+      try {
+        r = await withPlugin((p) => p.check({ url, token: getToken() }));
+        break;
+      } catch (e) {
+        error = e;
+      }
+    }
+    if (!r) throw error;
     if (r.updated) {
       window.dispatchEvent(new Event("lifeos-update-ready"));
       return `Update downloaded (${r.downloaded ?? 0} files changed).`;

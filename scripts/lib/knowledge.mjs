@@ -211,6 +211,16 @@ export function readingStates(log, books) {
 // A day's own shuffle: the same order all day, a different one tomorrow (so new cards vary).
 const dayRank = (id, today) => createHash("sha1").update(`${today}|${id}`).digest().readUInt32BE(0);
 
+// A pool of plain facts for the phone Gate's Purpose read (it shows each once before any comes back),
+// a different mix each day.
+export function factPool(today, n = 20) {
+  return allCards()
+    .filter((c) => c.text) // the fact text only, even on cards with a recall question
+    .sort((a, b) => dayRank(a.id, today) - dayRank(b.id, today))
+    .slice(0, n)
+    .map(({ id, title, text, source }) => ({ id, type: "card", title, text, source }));
+}
+
 // A short session: due cards first (as a question when they have one), then new cards from different
 // decks, plus the next passage of the current long read.
 export function session(today, n = 3) {

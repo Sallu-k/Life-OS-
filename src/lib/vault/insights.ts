@@ -102,6 +102,26 @@ function readingTrend(records: DailyRecord[], today: string): Finding[] {
   ];
 }
 
+// Protein over the last 30 days (Today's Food tab totals): days logged, the average, days at the target.
+// Shown once there are 5 logged days; only the daily totals are read, never which foods.
+export function proteinFinding(records: DailyRecord[], target: number, today: string): Finding[] {
+  const from = new Date(`${today}T12:00:00`);
+  from.setDate(from.getDate() - 30);
+  const since = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
+  const days = records.filter((r) => r.date > since && r.date <= today && r.protein !== null).map((r) => r.protein!);
+  if (days.length < 5) return [];
+  const reached = days.filter((g) => g >= target).length;
+  const mean = Math.round(avg(days)!);
+  return [
+    {
+      title: `Protein: ${mean} g a day on average, the target (${target} g) reached on ${reached} of ${days.length} logged days.`,
+      detail: `Last 30 days, from the Food tab's totals. Values are estimates per home portion.`,
+      days: days.length,
+      tone: reached * 2 >= days.length ? "good" : "care",
+    },
+  ];
+}
+
 export function findInsights(records: DailyRecord[], habits: HabitDefinition[], sleepBy = "23:00", today = new Date().toISOString().slice(0, 10)): Finding[] {
   const out: Finding[] = [...earlyNights(records, habits, sleepBy), ...readingTrend(records, today)];
   const label = (id: string) => habits.find((h) => h.id === id)?.label ?? id;

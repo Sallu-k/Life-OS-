@@ -4,6 +4,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { getDay, readHabits, readNotes, readOnce } from "./days.mjs";
+import { readFoods } from "./foods.mjs";
 import { getPlan } from "./plan.mjs";
 import { getMoney } from "./money.mjs";
 import { getRewards } from "./rewards.mjs";
@@ -57,6 +58,7 @@ function makePack(today) {
   keep("settings", () => readSettings());
   keep("rewards", () => getRewards(today));
   keep("notes", () => ({ notes: readNotes() }));
+  keep("foods", () => readFoods());
   keep("knowledge/session?n=5", () => session(today, 5));
   const reading = tryRead(() => listItems("books").filter((b) => b.status === "reading").map((b) => ({ slug: b.slug, title: String(b.title) }))) ?? [];
   keep("knowledge/library", () => ({ ...library(today), reading }));

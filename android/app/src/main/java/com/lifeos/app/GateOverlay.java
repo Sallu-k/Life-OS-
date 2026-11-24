@@ -29,7 +29,9 @@ import org.json.JSONObject;
  * The Gate: "Why now?" drawn by GateService straight on top of everything (a "Display over other apps"
  * window), not as a separate screen: OnePlus blocks apps from opening screens from the background, but not
  * this. It appears at once after an unlock, and Home cannot skip it (Unlock is always one slide away).
- * Purpose is one slide with no questions. Leisure first asks you to read a little (a card, a recall
+ * Purpose is one slide with no questions, except for a watched app (YouTube, Brave...):
+ * one fact for 5 s (none repeats within 10), then 10 minutes. Urgent at night: reading (15 s, then 30 s, then a minute each night;
+ * your book or a fact), then no Gate until the phone has been away 5 minutes. Leisure first asks you to read a little (a card, a recall
  * question or the next passage of your long read), then offers your book, then asks what kind and for how
  * long; the session runs out and asks again, with one more thing to learn and a longer "more" each time.
  * No waiting until the day's leisure passes gate.cap (3 h); then the growing breaths return. Note and Task save straight to the PC (queued when it is
@@ -172,17 +174,17 @@ final class GateOverlay {
     private void urgent() {
         LinearLayout col = column();
         col.addView(title("What is urgent?"));
-        col.addView(small("A few words. Then a minute's pause, then 15 minutes."));
+        col.addView(small("A few words. Then a little reading (longer each time tonight), then open until the phone is away for 5 minutes."));
         EditText input = new EditText(ctx);
         input.setTextColor(ctx.getColor(R.color.widget_ink));
         input.setHintTextColor(ctx.getColor(R.color.widget_dim));
         input.setHint("e.g. reply to the class group about tomorrow");
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         col.addView(input);
-        Button go = button("Continue", () -> pause(60, false, () -> {
-            GateStore.allowUrgent(ctx, 15);
-            finishWith("unlock", "urgent", 15);
-        }, "Opening in "));
+        Button go = button("Continue", () -> readPause(GateStore.urgentSeconds(ctx), "A little reading first", readingFor(), () -> {
+            GateStore.allowUrgent(ctx);
+            finishWith("unlock", "urgent", 0);
+        }, this::night));
         go.setEnabled(false);
         go.setAlpha(0.4f);
         input.addTextChangedListener(new android.text.TextWatcher() {
@@ -226,8 +228,8 @@ final class GateOverlay {
         row.addView(note);
         row.addView(task);
         col.addView(row);
-        boolean dual = MODE_APP.equals(mode) && pkg != null && GateStore.dual(ctx, pkg);
-        col.addView(small(dual ? "Right for a task (10 min), left for Leisure" : one != null ? "Slide right to do it, left for Leisure" : "Slide right for Purpose, left for Leisure"));
+        boolean watchedApp = purposeApp() != null;
+        col.addView(small(watchedApp ? "Right for a task (a short read, then 10 min), left for Leisure" : one != null ? "Slide right to do it, left for Leisure" : "Slide right for Purpose, left for Leisure"));
         // The dial fills the rest of the screen; its circle sits over the fingerprint sensor (GateDial).
         GateDial d = new GateDial(ctx, this::picked);
         col.addView(d, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -278,10 +280,12 @@ final class GateOverlay {
 
     private void picked(int choice) {
         // The log keeps its words ("unlock" for Purpose, "fun" for Leisure), so history and Insights still match.
-        if (choice == GateDial.PURPOSE) {
+        if (choice != GateDial.PURPOSE) readFirst();
+        else if (purposeApp() != null) purposeRead();
+        else {
             GateService.allowUnder();
             finishWith("unlock", null, 0);
-        } else readFirst();
+        }
     }
 
     /** A task pass in a work-and-fun app (Brave) ran out with the app still open. */
@@ -289,13 +293,98 @@ final class GateOverlay {
         LinearLayout col = column();
         col.addView(title("Still for the task?"));
         col.addView(small("10 minutes are up."));
-        col.addView(button("Yes, 10 more min", () -> {
-            GateService.allowUnder();
-            finishWith("unlock", null, 0);
-        }));
+        col.addView(button("Yes, 10 more min", this::purposeRead));
         col.addView(button("Task done", () -> turnedBack("done", "Good work.")));
         col.addView(button("It's leisure now", () -> readFirst()));
         show(col, false);
+    }
+
+    // ---------- Purpose in a watched app: a short read, then 10 minutes ----------
+
+    /** The watched app this Purpose is for (YouTube, Brave...), or null when it needs no read: the app that
+     *  brought the Gate, or the app under the unlock Gate. */
+    private String purposeApp() {
+        if ((MODE_APP.equals(mode) || MODE_STILL.equals(mode)) && pkg != null) return pkg;
+        return MODE_UNLOCK.equals(mode) ? GateService.watchedUnder() : null;
+    }
+
+    /** One fact for 5 s (never one of the last 10 shown), then 10 minutes in the app. */
+    private void purposeRead() {
+        readPause(5, "For the task: one fact first", GateStore.nextFact(ctx), () -> {
+            GateService.allowUnder();
+            finishWith("unlock", null, 0);
+        }, this::start);
+    }
+
+    // ---------- a moment of reading instead of waiting (Urgent, Purpose) ----------
+
+    /** `it` to read while the time runs (Urgent: readingFor(); Purpose: a fact). "Continue" opens when the
+     *  time is up (a bar fills meanwhile). Nothing cached: the breathing pause instead. */
+    private void readPause(int seconds, String label, JSONObject it, Runnable then, Runnable back) {
+        if (it == null) {
+            pause(seconds, false, then, "Continue in ");
+            return;
+        }
+        boolean passage = "passage".equals(it.optString("type"));
+        LinearLayout col = column();
+        col.setPadding(col.getPaddingLeft(), dp(48), col.getPaddingRight(), col.getPaddingBottom());
+        col.addView(small(label));
+        String head = passage ? it.optString("title") + chapterOf(it) : it.optString("title");
+        TextView t = title(head);
+        t.setTextSize(24);
+        col.addView(t);
+        col.addView(reading(it.optString("text")), new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
+        View bar = new View(ctx);
+        bar.setBackgroundColor(ctx.getColor(R.color.widget_brass));
+        bar.setPivotX(0f);
+        bar.setScaleX(0f);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(3));
+        barLp.topMargin = dp(10);
+        col.addView(bar, barLp);
+        Button go = button("Continue in " + seconds + " s", () -> {
+            if (passage) GateStore.readDone(ctx, "passage", GateStore.passageId(it), true);
+            else {
+                GateStore.readDone(ctx, "read", it.optString("id"), false);
+                GateStore.factShown(ctx, it.optString("id"));
+            }
+            then.run();
+        });
+        go.setEnabled(false);
+        col.addView(go);
+        col.addView(button("Back", back));
+        show(col, false);
+        go.animate().cancel(); // the step's entrance would fade it up to full
+        go.setAlpha(0.45f);
+        go.setTranslationY(0f);
+        bar.animate().scaleX(1f).setDuration(seconds * 1000L).setInterpolator(new android.view.animation.LinearInterpolator()).start();
+        int[] left = { seconds };
+        Runnable tick = new Runnable() {
+            @Override
+            public void run() {
+                if (left[0] <= 0) {
+                    go.setText("Continue");
+                    go.setEnabled(true);
+                    go.animate().alpha(1f).setDuration(220).start();
+                    return;
+                }
+                go.setText("Continue in " + left[0] + " s");
+                left[0]--;
+                handler.postDelayed(this, 1000);
+            }
+        };
+        tick.run();
+    }
+
+    /** Urgent's reading: the book, else a fact. */
+    private JSONObject readingFor() {
+        JSONObject p = book();
+        if (p != null && !p.optString("text").isEmpty()) return p;
+        return GateStore.nextFact(ctx);
+    }
+
+    private static String chapterOf(JSONObject p) {
+        String c = p.optString("chapter", "");
+        return c.isEmpty() || "null".equals(c) ? "" : " · " + c;
     }
 
     // ---------- Leisure: read a little first ----------
@@ -406,10 +495,10 @@ final class GateOverlay {
         return sv;
     }
 
-    /** Past the leisure cap: keeps "Done" dim and off for about 3 seconds a line (60 characters), at most 30 s. */
+    /** Keeps "Done" dim and off: 5 s (never easier than Purpose), past the leisure cap about 3 s a line
+     *  (60 characters), at most 30 s. */
     private void holdUntilRead(Button done, String s) {
-        if (!GateStore.overCap(ctx)) return; // under the cap the fact is a gift, not a wait
-        int seconds = Math.min(30, Math.max(3, 3 * (s.length() / 60 + 1)));
+        int seconds = GateStore.overCap(ctx) ? Math.min(30, Math.max(5, 3 * (s.length() / 60 + 1))) : 5;
         done.setEnabled(false);
         done.animate().cancel(); // the step's entrance would fade it up to full
         done.setTranslationY(0f);
@@ -638,12 +727,21 @@ final class GateOverlay {
 
     // ---------- small view helpers (colours from res/values/widget.xml) ----------
 
-    /** Shows a step; its parts rise and fade in one after another (a soft, quick entrance). */
+    /** Shows a step: the last one fades up and away while the new one's parts rise and fade in one after
+     *  another (a soft, quick hand-over instead of a jump). */
     private void show(LinearLayout v, boolean dial) {
         onDial = dial;
         if (root == null) return;
-        root.removeAllViews();
-        root.addView(v, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        FrameLayout r = root;
+        while (r.getChildCount() > 1) r.removeViewAt(0); // a hand-over still running: finish it now
+        View old = r.getChildCount() > 0 ? r.getChildAt(0) : null;
+        r.addView(v, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        if (old != null) {
+            old.setEnabled(false);
+            old.animate().cancel();
+            old.animate().alpha(0f).translationY(-dp(10)).setDuration(140).setStartDelay(0)
+                .withEndAction(() -> r.removeView(old)).start();
+        }
         root.requestFocus();
         for (int i = 0; i < v.getChildCount(); i++) {
             View child = v.getChildAt(i);
@@ -698,6 +796,14 @@ final class GateOverlay {
         b.setTextColor(ctx.getColor(R.color.widget_ink));
         b.setBackgroundResource(R.drawable.gate_button);
         if (onClick != null) b.setOnClickListener(v -> onClick.run());
+        // Pressing sinks it a little; letting go springs it back (feels like a real button).
+        b.setOnTouchListener((v, e) -> {
+            int a = e.getActionMasked();
+            if (a == android.view.MotionEvent.ACTION_DOWN && v.isEnabled()) v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(90).start();
+            else if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(160).setInterpolator(new android.view.animation.OvershootInterpolator(2f)).start();
+            return false;
+        });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56));
         lp.topMargin = dp(10);
         b.setLayoutParams(lp);

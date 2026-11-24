@@ -24,7 +24,26 @@ interface Device {
   gateSync(o: { date?: string; times?: Record<string, string> }): Promise<void>;
   takeGateQueue(): Promise<{ items: { path: "capture" | "task"; body: { text: string; date?: string; kind?: string } }[] }>;
   accentColors(): Promise<{ dark?: string; light?: string; dark2?: string; light2?: string }>;
+  setTaskNags(o: { tasks: TaskNag[] }): Promise<void>;
 }
+
+// A task reminder that rings again every `every` minutes from `first` until `until` (ms), or until Done
+// (android/.../TaskNag.java). `sticky` ones cannot be swiped away.
+export interface TaskNag {
+  key: string;
+  date: string;
+  text: string;
+  title: string;
+  body: string;
+  priority: string | null;
+  first: number;
+  every: number;
+  until: number;
+  sticky: boolean;
+}
+
+// Replaces the phone's list of task reminders that ring until done; false on an older app without them.
+export const setTaskNags = async (tasks: TaskNag[]) => (await withDevice((p) => p.setTaskNags({ tasks }).then(() => true))) === true;
 
 // A Capacitor plugin object must never be the value of a promise (see lib/liveUpdate.ts).
 let box: Promise<{ p: Device }> | null = null;

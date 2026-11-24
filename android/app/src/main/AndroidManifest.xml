@@ -79,6 +79,10 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Shows the owner's own 'why now?' screen right after the phone is unlocked" />
         </service>
+        <!-- Task reminders that ring again until done (TaskNag): its alarms and the Done / Snooze buttons. -->
+        <receiver
+            android:name=".TaskNag"
+            android:exported="false" />
         <receiver
             android:name=".GateBoot"
             android:exported="false">

@@ -20,6 +20,7 @@ import { gateBetween, gateInfo, logGate } from "./lib/gate.mjs";
 import { library, logKnowledge, passages, saveQuote, session } from "./lib/knowledge.mjs";
 import { createItem, getItem, listItems, saveImage, trashItem, updateItem } from "./lib/notes.mjs";
 import { readSettings, writeSettings } from "./lib/settings.mjs";
+import { readFoods, writeFoods } from "./lib/foods.mjs";
 import { getReview, saveReview, weekOf } from "./lib/review.mjs";
 import { backupStatus, runBackup, setBackupDir, startBackups } from "./lib/backup.mjs";
 import { startUsage } from "./lib/usage.mjs";
@@ -367,6 +368,8 @@ async function api(req, res, parts) {
     scheduleBuild();
     return json(res, 200, list);
   }
+  if (name === "foods" && method === "GET") return json(res, 200, readFoods());
+  if (name === "foods" && method === "PUT") return json(res, 200, writeFoods((await readBody(req)).foods));
   // ---------- the Gate: "why are you using this?" on every unlock (counts only, never note text) ----------
   if (name === "gate" && method === "GET") return json(res, 200, gateInfo(localToday()));
   if (name === "gate" && method === "POST") {

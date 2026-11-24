@@ -7,7 +7,8 @@ import { repeatLabel } from "@/lib/repeat";
 import { anchorOf, savedSetup, splitAfter } from "@/lib/anchors";
 import { PlaceChips, TaskFields, type Draft } from "./TaskFields";
 
-const PRIORITY = { high: "⏫ High", medium: "🔼 Medium", low: "🔽 Low" } as const;
+// How each priority keeps reminding on the phone (lib/phoneReminders.ts RHYTHM).
+const PRIORITY = { high: "⏫ High · every 30 min", medium: "🔼 Medium · every 2 h", low: "🔽 Low" } as const;
 
 export type OnEdit = (task: Task, changes: Record<string, unknown>, row: Element | null) => void;
 
@@ -29,7 +30,7 @@ export function taskMeta(t: Task, showPlace: boolean): string[] {
     t.repeat && `🔁 ${repeatLabel(t.repeat)}`,
     t.priority && PRIORITY[t.priority],
     t.start && t.start > localToday() && `🛫 from ${placeLabel(t.start)}`,
-    t.nag && "🔔",
+    t.nag && "🔔 every 15 min",
     steps,
     t.note && "📝",
   ].filter(Boolean) as string[];
@@ -77,11 +78,11 @@ export function TaskRow({ task, showPlace, onEdit, compact = false }: { task: Ta
   const meta = taskMeta(task, showPlace);
   return (
     <li className="feel-enter py-2">
-      <div className="plan-row">
+      <div className="plan-row" data-priority={task.done ? undefined : (task.priority ?? undefined)}>
         {!someday && (
           <input
             type="checkbox"
-            className="h-5 w-5 shrink-0 accent-[var(--brass)]"
+            className="task-check h-5 w-5 shrink-0 accent-[var(--brass)]"
             checked={task.done}
             onChange={(e) => onEdit(task, { done: e.target.checked }, e.currentTarget.closest("li"))}
             aria-label={`Done: ${task.text}`}

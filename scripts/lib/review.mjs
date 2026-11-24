@@ -9,6 +9,8 @@ import { getSection, setSection } from "./notes.mjs";
 import { gateBetween } from "./gate.mjs";
 import { knowledgeBetween } from "./knowledge.mjs";
 import { pcBetween } from "./pclog.mjs";
+import { readSettings } from "./settings.mjs";
+import { targets } from "../../src/lib/nutrition.ts";
 import { vaultRoot } from "./vault-write.mjs";
 
 const SCORE = { done: 1, half: 0.5, partial: 0.25, missed: 0 };
@@ -80,9 +82,18 @@ function weekStats(days) {
     gate: { ...gateBetween(days[0], days[6]), urgentBefore: gateBetween(shift(days[0], -7), shift(days[6], -7)).unlock },
     // Knowledge: cards read or recalled and passages read this week (counts only).
     knowledge: knowledgeBetween(days[0], days[6]),
+    // Food: protein and calories on the days something was logged (totals only, never which foods).
+    food: foodWeek(all),
     // PC time per app (StayFree, Logs/PC): hours, the top apps, minutes a night after the night lock.
     pc: pcBetween(days[0], days[6]),
   };
+}
+
+function foodWeek(all) {
+  const logged = all.filter((d) => d.protein !== null && d.protein !== undefined);
+  if (!logged.length) return null;
+  const target = targets(readSettings().nutrition).protein;
+  return { days: logged.length, protein: Math.round(avg(logged.map((d) => d.protein))), kcal: Math.round(avg(logged.map((d) => d.kcal ?? 0))), target, reached: logged.filter((d) => d.protein >= target).length };
 }
 
 export function getReview(id) {
