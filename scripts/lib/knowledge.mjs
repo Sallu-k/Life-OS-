@@ -68,10 +68,25 @@ function bookQuotes() {
   return cards;
 }
 
+// Parsed files are kept until one of them changes (each Gate or review request used to re-read and
+// re-parse every card and book note several times, which held up the phone's other requests).
+// Callers must not change the returned lists.
+const memo = new Map();
+function untilChanged(name, dirs, make) {
+  const key = dirs.map((d) => listMd(d).map((f) => `${f}:${statSync(join(d, f)).mtimeMs}`).join("|")).join("||");
+  const hit = memo.get(name);
+  if (hit && hit.key === key) return hit.value;
+  const value = make();
+  memo.set(name, { key, value });
+  return value;
+}
+
 export function allCards() {
   const dir = join(root(), "Cards");
-  const decks = listMd(dir).flatMap((f) => parseDeck(slugify(basename(f, ".md")), readFileSync(join(dir, f), "utf8")));
-  return [...decks, ...bookQuotes()];
+  return untilChanged("cards", [dir, join(vaultRoot(), collection("books").folder)], () => {
+    const decks = listMd(dir).flatMap((f) => parseDeck(slugify(basename(f, ".md")), readFileSync(join(dir, f), "utf8")));
+    return [...decks, ...bookQuotes()];
+  });
 }
 
 // Title pages, contents lists and scan credits: mostly capitals, or the telltale words.

@@ -1,6 +1,6 @@
 // Reading and writing notes for the LifeOS server. Every write first copies the old file into
 // <vault>/.lifeos-backup/<date>/, and nothing is ever hard-deleted (deletes move to <vault>/_trash/).
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import matter from "gray-matter";
 import { COLLECTIONS, cleanValue } from "./collections.mjs";
@@ -52,12 +52,18 @@ function toJson(c, slug, raw) {
   return item;
 }
 
+// Parsed notes are kept until a file in the folder changes (every day read lists the books, and parsing
+// all of them each time held up the phone's other requests). Callers get their own copy.
+const parsed = new Map();
 export function listItems(name) {
   const c = collection(name);
   const dir = join(vaultRoot(), c.folder);
   if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((f) => f.endsWith(".md"))
+  const files = readdirSync(dir).filter((f) => f.endsWith(".md"));
+  const key = files.map((f) => `${f}:${statSync(join(dir, f)).mtimeMs}`).join("|");
+  const hit = parsed.get(dir);
+  if (hit && hit.key === key) return structuredClone(hit.items);
+  const items = files
     .map((f) => {
       try {
         return toJson(c, f.slice(0, -3), readFileSync(join(dir, f), "utf8"));
@@ -66,6 +72,8 @@ export function listItems(name) {
       }
     })
     .filter(Boolean);
+  parsed.set(dir, { key, items });
+  return structuredClone(items);
 }
 
 export function getItem(name, slug) {

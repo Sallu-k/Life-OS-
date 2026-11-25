@@ -36,7 +36,7 @@ $dot = [char]0x00B7
 
 $state = @{ step = ""; mode = "unlock"; answered = $true; passed = [datetime]::MinValue; funUntil = [datetime]::MinValue
   funKind = "fun"; funMinutes = 0; ext = 0; locked = $false; lastTick = Get-Date; info = $null; fact = $null
-  urgentUntil = [datetime]::MinValue; nightNote = $false; more = 10; ytSince = [datetime]::MinValue; ytSeen = [datetime]::MinValue; ytNext = [datetime]::MinValue; warned = $null
+  urgentUntil = [datetime]::MinValue; urgentCount = 0; urgentLast = [datetime]::MinValue; nightNote = $false; more = 10; ytSince = [datetime]::MinValue; ytSeen = [datetime]::MinValue; ytNext = [datetime]::MinValue; warned = $null
   funDay = ""; funCounts = @{}; fits = @(); revealed = $false; greyByUs = $false; greyAt = [datetime]::MinValue; greyUntil = [datetime]::MinValue
   leisureDay = ""; leisure = 0; seen = @{}; bit = $null }
 
@@ -124,6 +124,10 @@ public static class LifeOSFront {
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   public static string Title() { var s = new StringBuilder(512); GetWindowText(GetForegroundWindow(), s, 512); return s.ToString(); }
   public static uint Pid() { uint pid; GetWindowThreadProcessId(GetForegroundWindow(), out pid); return pid; }
+  [StructLayout(LayoutKind.Sequential)] struct LastInput { public uint size; public uint time; }
+  [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LastInput li);
+  // Seconds since the last key press or mouse move (for the urgent pass: 5 minutes away ends it).
+  public static double IdleSeconds() { var li = new LastInput(); li.size = 8; GetLastInputInfo(ref li); return ((uint)Environment.TickCount - li.time) / 1000.0; }
 }
 '@
 function Get-Front {
@@ -732,13 +736,13 @@ function Show-Night {
   Add-Card $row 343 182 "Shut down" "In one minute (shutdown /a cancels)" "S" $noteTint { Close-Gate "back"; shutdown.exe /s /t 60 /c "LifeOS: good night." } | Out-Null
   $row2 = Add-Row 80
   Add-Card $row2 343 66 "Note for tomorrow" "Then the PC locks" "N" $noteTint { $state.nightNote = $true; Show-Write $true } | Out-Null
-  Add-Card $row2 343 66 "Urgent" "Say what, wait a minute, 15 min" "U" $taskTint { Show-Urgent } | Out-Null
+  Add-Card $row2 343 66 "Urgent" "Say what, a short pause, then open" "U" $taskTint { Show-Urgent } | Out-Null
 }
 
 function Show-Urgent {
   Clear-Step "urgent"
   Add-Text "What is urgent?" 30 $ink $displayBold 4 | Out-Null
-  Add-Text "A few words (never saved). Then a minute's pause, then 15 minutes." 12 $dim $textFace 18 | Out-Null
+  Add-Text "A few words (never saved). Then a short pause (longer each time tonight); open until 5 minutes away." 12 $dim $textFace 18 | Out-Null
   $box = New-Object Windows.Forms.TextBox
   $box.BorderStyle = "None"
   $box.Font = Get-Font $textFace 16
@@ -758,8 +762,16 @@ function Show-Urgent {
   $box.Focus() | Out-Null
 }
 
+# As on the phone: 15 s the first time in a night, 30 s the second, then a minute. The pass stays open
+# while the PC is in use and ends after 5 minutes without a key press or mouse move (see the night check).
 function Start-Urgent {
-  Start-Pause 60 "urgent" 15 $false "Opening in" { $state.urgentUntil = (Get-Date).AddMinutes(15); Close-Gate "unlock" "urgent" 15 }
+  if (((Get-Date) - $state.urgentLast).TotalHours -ge 12) { $state.urgentCount = 0 }
+  $seconds = @(15, 30, 60)[[Math]::Min($state.urgentCount, 2)]
+  Start-Pause $seconds "urgent" 5 $false "Opening in" {
+    $state.urgentCount++; $state.urgentLast = Get-Date
+    $state.urgentUntil = (Get-Date).AddMinutes(5)
+    Close-Gate "unlock" "urgent" 5
+  }
 }
 
 # A breath before leisure starts (5 s), longer for each extension (15 s, then 30 s): a circle that grows
@@ -995,7 +1007,9 @@ $watch.add_Tick({
     if (Test-YouTube $front) { Show-Warning "Night lock in $toNight minutes" "YouTube closes at $(Get-NightFrom)." }
   }
   # Night lock: YouTube closes (even with an urgent pass). While the PC is in use the night Gate
-  # comes back (an urgent pass keeps it away for 15 minutes), except while a game runs: games are never stopped.
+  # comes back (an urgent pass keeps it away while the PC is in use, until 5 minutes without input), except
+  # while a game runs: games are never stopped.
+  if ($state.urgentUntil -gt $now) { $state.urgentUntil = $now.AddSeconds(300 - [LifeOSFront]::IdleSeconds()) }
   if (-not $locked -and (Test-Night)) {
     if (Test-YouTube $front) { Close-YouTubeTab }
     if ($state.urgentUntil -lt $now -and ($now - $state.passed).TotalSeconds -ge 20 -and -not (Test-GameRunning)) { Show-Gate "unlock"; return }

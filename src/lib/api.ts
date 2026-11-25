@@ -104,6 +104,24 @@ export function markPcBack() {
 }
 if (typeof window !== "undefined") window.addEventListener("online", markPcBack);
 
+// The router sometimes gives the PC a new address, which the phone has never seen. When no known address
+// answers, search the home network for it (lib/connect.ts) in the background, at most every 2 minutes;
+// the address found is saved, so the next request reaches the PC again.
+const SEARCH_MS = 120_000;
+let searchedAt = 0;
+function searchForPc() {
+  if (Date.now() - searchedAt < SEARCH_MS) return;
+  searchedAt = Date.now();
+  void import("./connect")
+    .then((m) => m.connectToPc())
+    .then((url) => {
+      if (!url) return;
+      write(GOOD_KEY, url);
+      markPcBack();
+    })
+    .catch(() => undefined);
+}
+
 const offlineError = () => Object.assign(new Error("The PC is not reachable right now."), { name: "Offline" });
 
 export async function api<T = unknown>(path: string, init: Init = {}): Promise<T> {
@@ -142,7 +160,10 @@ export async function api<T = unknown>(path: string, init: Init = {}): Promise<T
     }
     throw last;
   } catch (e) {
-    if (!(e as { status?: number }).status) awayUntil = Date.now() + AWAY_MS;
+    if (!(e as { status?: number }).status) {
+      awayUntil = Date.now() + AWAY_MS;
+      searchForPc();
+    }
     throw e;
   }
 }

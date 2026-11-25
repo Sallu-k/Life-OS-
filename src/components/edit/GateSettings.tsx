@@ -79,7 +79,7 @@ export function GateSettings() {
     <div className="card flex flex-col gap-4 p-5 text-sm">
       <h2 className="font-serif text-xl text-ink">The Gate</h2>
       <p className="text-ink-dim">
-        After every unlock, choose why: Unlock (urgent, one slide), Fun (one thing to learn first; the session runs out and asks again, each "more" a little longer), Note or Task. No waiting until the day&rsquo;s leisure passes the limit below; after it, the breathing pauses come back. Each choice is logged, never the text.
+        After every unlock, choose why: Purpose (one slide; in YouTube, Brave and the like a 5 s fact first, then 10 minutes), Leisure (a fact first; the session runs out and asks again, each &ldquo;more&rdquo; a little longer), Note or Task. Past the day&rsquo;s leisure limit below, the pauses get longer. Each choice is logged, never the text.
       </p>
       {app && status && (
         <div className="flex flex-col gap-2">
@@ -115,7 +115,7 @@ export function GateSettings() {
       </div>
       <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2">
-          <input type="checkbox" checked={Boolean(gate.night?.from)} onChange={(e) => setGate({ ...gate, night: { from: e.target.checked ? "22:30" : null, until: gate.night?.until ?? "05:00" } })} />
+          <input type="checkbox" checked={Boolean(gate.night?.from)} onChange={(e) => setGate({ ...gate, night: { ...gate.night, from: e.target.checked ? "22:30" : null, until: gate.night?.until ?? "05:00" } })} />
           <span className="text-ink">Night lock</span>
         </label>
         {gate.night?.from && (
@@ -140,7 +140,7 @@ export function GateSettings() {
             )}
           </div>
         )}
-        <p className="text-ink-dim">At night the Gate offers only Sleep, a note for tomorrow, or Urgent (say what, wait a minute, then 15 minutes). No leisure, and leisure timers end when it starts.</p>
+        <p className="text-ink-dim">At night the Gate offers only Sleep, a note for tomorrow, or Urgent (say what, then a little reading: 15 s the first time in a night, 30 s the second, then a minute; it stays open until the phone or PC is left alone for 5 minutes). No leisure, and leisure timers end when it starts.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="edit-field">
@@ -152,7 +152,7 @@ export function GateSettings() {
           <input className="today-input w-28" type="number" min={30} max={720} step={15} value={gate.cap ?? 180} onChange={(e) => setGate({ ...gate, cap: Number(e.target.value) || 180 })} />
         </label>
         <label className="edit-field">
-          <span>Fun lengths (minutes)</span>
+          <span>Leisure lengths (minutes)</span>
           <input
             className="today-input"
             value={gate.minutes.join(", ")}
@@ -161,15 +161,15 @@ export function GateSettings() {
         </label>
       </div>
       <label className="edit-field">
-        <span>Kinds of fun, one per line (Name: app to open on the phone, optional)</span>
+        <span>Kinds of leisure, one per line (Name: app to open on the phone, optional)</span>
         <textarea className="today-input" rows={4} value={fun} onChange={(e) => setFun(e.target.value)} />
       </label>
       <label className="edit-field">
-        <span>Phone apps that bring the Gate back when opened without Fun (one per line)</span>
+        <span>Phone apps that bring the Gate back when opened outside Leisure (one per line)</span>
         <textarea className="today-input" rows={3} value={watch} onChange={(e) => setWatch(e.target.value)} placeholder="com.google.android.youtube" />
       </label>
       <label className="edit-field">
-        <span>Apps for both work and fun (Purpose lets them through for 10 min, then asks again)</span>
+        <span>Apps for both work and leisure (Purpose lets them through for 10 min, then asks again)</span>
         <textarea className="today-input" rows={2} value={dual} onChange={(e) => setDual(e.target.value)} placeholder="com.brave.browser" />
       </label>
       <div className="flex items-center gap-3">

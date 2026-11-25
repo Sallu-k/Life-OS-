@@ -43,11 +43,11 @@ export function StatusWindow({ game }: { game: GameState }) {
             .filter((h) => h.active)
             .map((h) => (
               <li key={h.id} className="flex items-center gap-3 text-sm">
-                <span className="w-36 shrink-0 truncate text-ink">{h.label}</span>
-                <span className="status-bar flex-1" aria-hidden="true">
+                <span className="w-32 shrink-0 truncate text-ink">{h.label}</span>
+                <span className="status-bar min-w-8 flex-1" aria-hidden="true">
                   <span style={{ width: `${Math.round(h.strength * 100)}%` }} />
                 </span>
-                <span className="w-24 shrink-0 text-right text-xs text-ink-dim">
+                <span className="shrink-0 whitespace-nowrap text-right text-xs text-ink-dim">
                   {pct(h.strength)}
                   {h.streak > 1 && <span title={`Streak: ${h.streak} days (best ${h.best})`}> · 🔥{h.streak}</span>}
                   {h.core && h.weeksMet > 0 && <span title={`Weekly target reached ${h.weeksMet} week${h.weeksMet > 1 ? "s" : ""} in a row`}> · ★{h.weeksMet}w</span>}

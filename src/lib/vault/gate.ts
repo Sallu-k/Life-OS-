@@ -51,8 +51,8 @@ export function gateFindings(events: GateEvent[], records: DailyRecord[], today:
     const n = recent.length;
     const fun = count(recent, "fun");
     out.push({
-      title: `${Math.round(n / days)} unlocks a day lately, ${pct(fun, n)} of them for fun.`,
-      detail: `Urgent ${pct(count(recent, "unlock"), n)} · fun ${pct(fun, n)} · book instead ${count(recent, "read")} · notes ${count(recent, "note")} · tasks ${count(recent, "task")}${count(recent, "skip") ? ` · skipped ${count(recent, "skip")}` : ""}.`,
+      title: `${Math.round(n / days)} unlocks a day lately, ${pct(fun, n)} of them for leisure.`,
+      detail: `Purpose ${pct(count(recent, "unlock"), n)} · leisure ${pct(fun, n)} · book instead ${count(recent, "read")} · notes ${count(recent, "note")} · tasks ${count(recent, "task")}${count(recent, "skip") ? ` · skipped ${count(recent, "skip")}` : ""}.`,
       days,
       tone: "neutral",
     });
@@ -65,8 +65,8 @@ export function gateFindings(events: GateEvent[], records: DailyRecord[], today:
   const more = count(month, "more");
   if (done + more >= 5)
     out.push({
-      title: done >= more ? `When fun time runs out, you usually stop.` : `When fun time runs out, you usually ask for more.`,
-      detail: `Last 4 weeks: stopped ${done} times, asked for 10 more ${more} times, across ${sessions} fun sessions.`,
+      title: done >= more ? `When leisure time runs out, you usually stop.` : `When leisure time runs out, you usually ask for more.`,
+      detail: `Last 4 weeks: stopped ${done} times, asked for 10 more ${more} times, across ${sessions} leisure sessions.`,
       days: new Set(month.filter((e) => e.choice === "done" || e.choice === "more").map((e) => e.date)).size,
       tone: done >= more ? "good" : "care",
     });
@@ -76,8 +76,8 @@ export function gateFindings(events: GateEvent[], records: DailyRecord[], today:
   const reached = read + back + sessions;
   if (reached >= 5)
     out.push({
-      title: read + back > 0 ? `You turned back ${Math.round(((read + back) / reached) * 100)}% of the times you reached for fun.` : `You have not turned back yet when you reached for fun.`,
-      detail: `Last 4 weeks: the book won ${read} times, "Never mind" at the pause ${back} times, fun went ahead ${sessions} times.`,
+      title: read + back > 0 ? `You turned back ${Math.round(((read + back) / reached) * 100)}% of the times you reached for leisure.` : `You have not turned back yet when you reached for leisure.`,
+      detail: `Last 4 weeks: the book won ${read} times, "Never mind" at the pause ${back} times, leisure went ahead ${sessions} times.`,
       days: new Set(month.filter((e) => ["read", "back", "fun"].includes(e.choice)).map((e) => e.date)).size,
       tone: read + back > 0 ? "good" : "neutral",
     });
@@ -103,8 +103,8 @@ export function gateFindings(events: GateEvent[], records: DailyRecord[], today:
   const low = pairs.filter(([f]) => f <= median).map(([, p]) => p);
   if (high.length >= 8 && low.length >= 8 && Math.abs(avg(high) - avg(low)) >= 3)
     out.push({
-      title: avg(high) < avg(low) ? `On days with more fun screen time, you read less.` : `More fun screen time has not cost you reading.`,
-      detail: `Over ${median} min of Gate fun: ${Math.round(avg(high))} pages; ${median} min or less: ${Math.round(avg(low))} pages.`,
+      title: avg(high) < avg(low) ? `On days with more leisure screen time, you read less.` : `More leisure screen time has not cost you reading.`,
+      detail: `Over ${median} min of Gate leisure: ${Math.round(avg(high))} pages; ${median} min or less: ${Math.round(avg(low))} pages.`,
       days: pairs.length,
       tone: avg(high) < avg(low) ? "care" : "neutral",
     });

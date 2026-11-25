@@ -2432,7 +2432,38 @@ input[type="checkbox"] {
     font-size: clamp(2.1rem, 7vw, 3rem);
     letter-spacing: -0.03em;
   }
-  /* Section labels: sentence case, no wide letter-spacing. */
+  /* Section labels: sentence case, no wide letter-spacing - also the older spaced-out CAPS labels
+     (Tailwind `uppercase tracking-*` in components, habit groups, agenda groups, badges, hints). */
+  & main .uppercase,
+  & .habit-group-title,
+  & .habit-overview-head,
+  & .hall-hint,
+  & .badge {
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  & .habit-group-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  /* The Balance chart's area names, in the same sentence case. */
+  & .balance-label {
+    letter-spacing: 0;
+    text-transform: none;
+    font-weight: 600;
+  }
+  /* A pill button never wraps its words onto two lines ("Save review"). */
+  & .chip {
+    white-space: nowrap;
+  }
+  /* Small labels (the task's parsed date, "Reading" on a cover): a tonal accent pill, not a black one. */
+  & .badge:not(.badge-live, .badge-flag) {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 16%, var(--surface, var(--bg)));
+    border-color: transparent;
+  }
   & .eyebrow,
   & .status-h {
     font-family: var(--font-label);

@@ -172,13 +172,13 @@ export function WeeklyReview() {
   );
 }
 
-// The Gate's week: why the screens were opened. Many "urgent" unlocks get a gentle question, never a limit.
+// The Gate's week: why the screens were opened. Many Purpose unlocks get a gentle question, never a limit.
 function GateWeek({ g }: { g: NonNullable<Review["stats"]["gate"]> }) {
   const up = g.unlock > g.urgentBefore + 5 && g.unlock >= 20;
   return (
     <p className="text-sm text-ink-dim">
-      The Gate: <span className="text-ink">{g.gates}</span> unlocks, {g.unlock} urgent, {g.fun} for fun ({g.funMinutes} min{g.more ? `, extended ${g.more} times` : ""}), the book won {g.read}.
-      {up && ` ${g.unlock} urgent unlocks, up from ${g.urgentBefore} last week. Were they all urgent?`}
+      The Gate: <span className="text-ink">{g.gates}</span> unlocks, {g.unlock} for a purpose, {g.fun} for leisure ({g.funMinutes} min{g.more ? `, extended ${g.more} times` : ""}), the book won {g.read}.
+      {up && ` ${g.unlock} Purpose unlocks, up from ${g.urgentBefore} last week. Were they all for a task?`}
     </p>
   );
 }

@@ -2,6 +2,7 @@
 
 import { SaveLine } from "@/components/knowledge/SaveLine";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, useIsApp, useServer } from "@/lib/api";
 import { isLockedNow, stamp, type MissedReason } from "@/lib/dayRules";
 import { feel } from "@/lib/feel/sounds";
@@ -416,12 +417,14 @@ function SyncBadge({ online, waiting }: { online: boolean; waiting: number }) {
     const timer = setTimeout(() => setSlow(true), 2000);
     return () => clearTimeout(timer);
   }, [waiting]);
-  if (online && !(waiting > 0 && slow)) return null;
-  return (
+  if (typeof document === "undefined" || (online && !(waiting > 0 && slow))) return null;
+  // On <body>: inside the page, a parent's transform or blur pins a "fixed" element over the content.
+  return createPortal(
     <p className="sync-badge" role="status">
       {online ? "Sending" : "Offline · saved on this device"}
       {waiting > 0 && ` · ${waiting} waiting`}
-    </p>
+    </p>,
+    document.body,
   );
 }
 
