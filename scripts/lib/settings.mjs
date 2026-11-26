@@ -96,6 +96,10 @@ function cleanNight(n) {
   return {
     from: HHMM.test(x.from ?? "") ? x.from : null, // off until you set it
     until: HHMM.test(x.until ?? "") ? x.until : "05:00",
+    // One later night a week (e.g. before a free morning): `lateDay` 0-6 (Sunday = 0, the evening's day)
+    // starts the lock at `lateFrom` instead. Off until both are set.
+    lateDay: Number.isInteger(Number(x.lateDay)) && x.lateDay !== null && Number(x.lateDay) >= 0 && Number(x.lateDay) <= 6 ? Number(x.lateDay) : null,
+    lateFrom: HHMM.test(x.lateFrom ?? "") ? x.lateFrom : null,
     grey: Number.isInteger(grey) && grey >= 0 && grey <= 180 ? grey : 30,
   };
 }

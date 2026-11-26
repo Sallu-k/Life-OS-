@@ -233,8 +233,9 @@ function taskReminders(t: Task, add: (key: string, when: Date, title: string, bo
 
 // The night lock (Settings › Night lock) ends each day's rhythm; 22:30 before the first sync, 23:00 when off.
 function nightOn(day: string): Date {
-  const night = keptCopy<{ gate?: { night?: { from?: string } | null } }>("settings")?.gate?.night;
-  const from = night === null ? "23:00" : /^\d{2}:\d{2}$/.test(night?.from ?? "") ? night!.from! : "22:30";
+  const night = keptCopy<{ gate?: { night?: { from?: string; lateDay?: number | null; lateFrom?: string | null } | null } }>("settings")?.gate?.night;
+  const late = night?.lateDay === new Date(`${day}T12:00:00`).getDay() && /^\d{2}:\d{2}$/.test(night?.lateFrom ?? "") ? night!.lateFrom! : null;
+  const from = night === null ? "23:00" : late ?? (/^\d{2}:\d{2}$/.test(night?.from ?? "") ? night!.from! : "22:30");
   return at(from < "12:00" ? addDays(day, 1) : day, from);
 }
 

@@ -89,6 +89,9 @@ function Get-NightFrom {
   $n = $state.info.night
   if ($null -eq $n) { return $null }  # off until it is set in Settings
   if ((Get-MinuteOfDay $n.from) -lt 0) { return $null }  # switched off
+  # One later night a week (Settings: night.lateDay 0-6, Sunday = 0, and night.lateFrom); after midnight
+  # it is the next day and the usual time still covers the early morning.
+  if ($null -ne $n.lateDay -and [int](Get-Date).DayOfWeek -eq [int]$n.lateDay -and (Get-MinuteOfDay $n.lateFrom) -ge 0) { return $n.lateFrom }
   return $n.from
 }
 function Test-Night {

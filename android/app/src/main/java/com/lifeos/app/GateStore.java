@@ -161,7 +161,11 @@ final class GateStore {
         JSONObject n = info(c).optJSONObject("night");
         if (n == null) return null; // off until it is set in Settings
         String from = n.optString("from", "");
-        return minuteOfDay(from) < 0 ? null : from;
+        if (minuteOfDay(from) < 0) return null;
+        // One later night a week (Settings: night.lateDay 0-6, Sunday = 0, and night.lateFrom).
+        int today = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK) - 1;
+        String late = n.optString("lateFrom", "");
+        return !n.isNull("lateDay") && n.optInt("lateDay", -1) == today && minuteOfDay(late) >= 0 ? late : from;
     }
 
     static boolean isNight(Context c) {

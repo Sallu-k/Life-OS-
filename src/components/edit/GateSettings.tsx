@@ -13,7 +13,7 @@ interface Gate {
   fun: { kind: string; label: string; app: string }[];
   watch: string[];
   dual?: string[];
-  night?: { from: string | null; until: string; grey?: number }; // night lock (scripts/lib/settings.mjs)
+  night?: { from: string | null; until: string; lateDay?: number | null; lateFrom?: string | null; grey?: number }; // night lock (scripts/lib/settings.mjs)
   cap?: number; // leisure minutes a day with no waiting on the Gates
 }
 
@@ -128,6 +128,23 @@ export function GateSettings() {
               <span>Until</span>
               <input className="today-input w-32" type="time" value={gate.night.until} onChange={(e) => e.target.value && setGate({ ...gate, night: { ...gate.night!, until: e.target.value } })} />
             </label>
+            <label className="edit-field">
+              <span>One later night a week</span>
+              <select className="today-input w-40" value={gate.night.lateDay ?? ""} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, lateDay: e.target.value === "" ? null : Number(e.target.value) } })}>
+                <option value="">None</option>
+                {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((d, i) => (
+                  <option key={d} value={i}>
+                    {d} night
+                  </option>
+                ))}
+              </select>
+            </label>
+            {gate.night.lateDay != null && (
+              <label className="edit-field">
+                <span>That night from</span>
+                <input className="today-input w-32" type="time" value={gate.night.lateFrom ?? ""} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, lateFrom: e.target.value || null } })} />
+              </label>
+            )}
             <label className="flex items-center gap-2 sm:col-span-2">
               <input type="checkbox" checked={(gate.night.grey ?? 30) > 0} onChange={(e) => setGate({ ...gate, night: { ...gate.night!, grey: e.target.checked ? 30 : 0 } })} />
               <span className="text-ink">Grey PC screen before the night lock</span>
