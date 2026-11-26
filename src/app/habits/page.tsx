@@ -29,7 +29,7 @@ export default function HabitsPage() {
     .slice(0, 10);
 
   return (
-    <main data-theme="minimal" className="mx-auto w-full max-w-5xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+    <main data-theme="minimal" className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="Rhythm" title="Habits" stats={[`${days.length} days logged`, "no streaks, no pressure"]} />
 
       <HabitOverview habits={defs.items} records={daily.items} />

@@ -2,7 +2,6 @@
 
 import { SaveLine } from "@/components/knowledge/SaveLine";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { api, useIsApp, useServer } from "@/lib/api";
 import { isLockedNow, stamp, type MissedReason } from "@/lib/dayRules";
 import { feel } from "@/lib/feel/sounds";
@@ -291,7 +290,7 @@ export function TodayApp({ game: built = true, snapshot }: { game?: boolean; sna
           <SyncBadge online={online} waiting={waiting} />
           {!day ? (
             <p className="text-ink-dim">
-              {!loaded ? "Loading…" : "Can't reach the PC yet and nothing is saved on this device. Check the PC address and token on the Settings page, and that the PC is on with Tailscale running."}
+              {!loaded ? "Loading…" : "Can't reach the PC yet and nothing is saved on this device. Check that the PC is on and the phone is on home Wi-Fi; the app looks for the PC by itself."}
             </p>
           ) : (
             <div className="flex flex-col gap-6">
@@ -417,14 +416,12 @@ function SyncBadge({ online, waiting }: { online: boolean; waiting: number }) {
     const timer = setTimeout(() => setSlow(true), 2000);
     return () => clearTimeout(timer);
   }, [waiting]);
-  if (typeof document === "undefined" || (online && !(waiting > 0 && slow))) return null;
-  // On <body>: inside the page, a parent's transform or blur pins a "fixed" element over the content.
-  return createPortal(
+  if (online && !(waiting > 0 && slow)) return null;
+  return (
     <p className="sync-badge" role="status">
       {online ? "Sending" : "Offline · saved on this device"}
       {waiting > 0 && ` · ${waiting} waiting`}
-    </p>,
-    document.body,
+    </p>
   );
 }
 

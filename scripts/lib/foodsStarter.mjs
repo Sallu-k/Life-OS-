@@ -40,6 +40,9 @@ const ROWS = [
   ["pathrode", "Pathrode", "Breads & breakfast", "1 slice", 100, 2],
   ["shevai-plain", "Shevai (rice noodles)", "Breads & breakfast", "1 plate (~150 g)", 200, 3],
   ["shevai-sweet", "Shevai with coconut milk and sugar", "Breads & breakfast", "1 plate (~200 g)", 350, 5],
+  ["shevai-sugar", "Sweet shevai (sugar and ghee, no milk)", "Breads & breakfast", "1 plate (~150 g)", 330, 3],
+  ["egg-dosa", "Egg dosa", "Breads & breakfast", "1 piece", 210, 9],
+  ["uttapam", "Uttapam", "Breads & breakfast", "1 piece", 250, 6],
   ["kori-rotti", "Rotti wafers (kori rotti)", "Breads & breakfast", "1 plate of wafers (~30 g)", 120, 2],
   ["idli", "Idli", "Breads & breakfast", "1 piece", 60, 2],
   ["dosa", "Dosa (plain)", "Breads & breakfast", "1 piece", 130, 3],
@@ -144,6 +147,13 @@ const ROWS = [
   ["roasted-chana", "Roasted chana", "Fruit & nuts", "1 handful (~30 g)", 110, 6],
 
   // ---------- snacks ----------
+  ["pani-puri", "Pani puri", "Snacks", "1 plate (6 puris)", 200, 4],
+  ["sev-puri", "Sev puri", "Snacks", "1 plate (6)", 300, 6],
+  ["dahi-puri", "Dahi puri", "Snacks", "1 plate (6)", 320, 8],
+  ["bhel-puri", "Bhel puri", "Snacks", "1 plate", 280, 6],
+  ["masala-puri", "Masala puri", "Snacks", "1 plate", 350, 9],
+  ["pav-bhaji", "Pav bhaji", "Snacks", "1 plate (2 pav + bhaji)", 450, 10],
+  ["vada-pav", "Vada pav", "Snacks", "1 piece", 300, 6],
   ["samosa", "Samosa", "Snacks", "1 piece", 260, 4],
   ["bajji", "Bajji / goli baje", "Snacks", "3 pieces", 200, 4],
   ["pakoda", "Onion pakoda", "Snacks", "1 plate (~100 g)", 320, 7],
@@ -164,6 +174,13 @@ const ROWS = [
   ["noodles", "Instant noodles", "Snacks", "1 pack", 350, 8],
 
   // ---------- restaurant and fast food ----------
+  ["chicken-kebab", "Chicken kebab (fried pieces)", "Restaurant & fast food", "1 plate (~150 g)", 380, 30],
+  ["beef-kebab", "Beef kebab pieces (fried)", "Restaurant & fast food", "1 plate (~150 g)", 400, 32],
+  ["wings-kebab", "Chicken wings kebab", "Restaurant & fast food", "6 pieces", 450, 32],
+  ["chicken-lollipop", "Chicken lollipop", "Restaurant & fast food", "6 pieces", 480, 30],
+  ["kebab-roll", "Chicken kebab roll with parotta", "Restaurant & fast food", "1 roll", 550, 24],
+  ["beef-kebab-roll", "Beef kebab roll with parotta", "Restaurant & fast food", "1 roll", 580, 26],
+  ["egg-roll", "Egg roll (parotta)", "Restaurant & fast food", "1 roll", 380, 13],
   ["pizza-chicken", "Chicken pizza", "Restaurant & fast food", "1 slice (medium pizza)", 300, 14],
   ["pizza-cheese-burst", "Cheese burst pizza", "Restaurant & fast food", "1 slice (medium pizza)", 360, 14],
   ["pizza-veg-whole", "Veg pizza, whole medium", "Restaurant & fast food", "1 pizza (6 slices)", 1400, 55],

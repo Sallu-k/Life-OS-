@@ -49,7 +49,8 @@ export function Incentives({ day, game, onSave }: { day: Day; game: boolean; onS
   const rewardsOn = r !== null && game && (Object.keys(r.per.earn).length > 0 || r.sleep.habit !== null);
   if (core.length === 0 && !rewardsOn) return null;
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
+    // Two columns only when both cards show (one alone would sit at half width).
+    <div className={`grid gap-6 ${core.length > 0 && rewardsOn ? "lg:grid-cols-[1.15fr_1fr]" : ""}`}>
       {core.length > 0 && <CoreHabits habits={core} r={r} />}
       {rewardsOn && r && <RewardTime day={day} r={r} onSave={onSave} />}
     </div>

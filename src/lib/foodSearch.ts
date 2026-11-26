@@ -13,7 +13,7 @@ const ALIASES: Record<string, string[]> = {
   bangda: ["mackerel"], bangude: ["mackerel"], surmai: ["kingfish"], anjal: ["kingfish"], paplet: ["pomfret"],
   chawal: ["rice"], bhaat: ["rice"], anna: ["rice"], kanji: ["ganji"],
   roti: ["chapati", "roti"], parata: ["parotta"], porotta: ["parotta"], barotta: ["parotta"], khubz: ["kuboos"],
-  shavige: ["shevai"], semiya: ["shevai"], sevai: ["shevai"], spaghetti: ["pasta"], penne: ["pasta"],
+  shavige: ["shevai"], semiya: ["shevai"], sevai: ["shevai"], spaghetti: ["pasta", "shevai"], sphegetti: ["pasta", "shevai"], spagetti: ["pasta", "shevai"], spageti: ["pasta", "shevai"], kabab: ["kebab"], kebap: ["kebab"], golgappa: ["pani"], gupchup: ["pani"], puchka: ["pani"], penne: ["pasta"],
   dahi: ["curd"], mosaru: ["curd"], doodh: ["milk"], haalu: ["milk"], chai: ["tea"], chaha: ["tea"], majjige: ["buttermilk"],
   kela: ["banana"], bale: ["banana"], aam: ["mango"], mavu: ["mango"], badam: ["almonds"], khajur: ["dates"], kharjura: ["dates"],
   kaju: ["cashews"], kadlekai: ["peanuts"], shenga: ["peanuts"], moongphali: ["peanuts"],

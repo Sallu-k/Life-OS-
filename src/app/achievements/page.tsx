@@ -23,7 +23,7 @@ export default function AchievementsPage() {
   const { items, warnings } = loadAchievements();
 
   return (
-    <main data-theme="trophy" className="mx-auto w-full max-w-3xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+    <main data-theme="trophy" className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="Milestones" title="Achievements" stats={[plural(items.length, "moment") + " worth keeping"]} />
       <SectionTools collection="achievements" />
 

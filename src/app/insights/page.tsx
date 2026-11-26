@@ -25,7 +25,7 @@ export default function InsightsPage() {
   const withSleep = records.filter((r) => r.sleep !== null).length;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+    <main className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="Patterns" title="Insights" stats={[`${records.length} days looked at`, "patterns, not proof"]} />
 
       {findings.length === 0 ? (

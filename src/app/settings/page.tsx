@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default function SettingsPage() {
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
+    <main className="mx-auto w-full max-w-4xl px-5 pb-16 pt-6 sm:px-8 sm:pb-24 sm:pt-14">
       <PageHeader eyebrow="LifeOS" title="Settings" stats={["Editing, connection, sound and feel"]} />
       <div className="flex flex-col gap-6">
         <SettingsPanel />

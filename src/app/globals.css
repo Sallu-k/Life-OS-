@@ -1486,12 +1486,10 @@ dialog.viewer::backdrop {
   .mark-btn:active, .feel-press:active { transform: none; }
 }
 
-/* Today's sync state: floats over the corner, so it never shifts the layout. */
+/* Today's sync state: a small pill in the page under the date (a floating one covered the last card). */
 .sync-badge {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 40;
+  align-self: flex-start;
+  width: fit-content;
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1586,10 +1584,6 @@ dialog.viewer::backdrop {
   .tab-sheet-link[aria-current="page"] {
     background: color-mix(in srgb, var(--brass) 14%, transparent);
     color: var(--brass);
-  }
-  /* The floating sync badge sits above the tab bar. */
-  .sync-badge {
-    bottom: calc(var(--tab-bar-height) + var(--inset-bottom) + 0.75rem);
   }
 }
 

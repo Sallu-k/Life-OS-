@@ -11,6 +11,10 @@ import { crc32, deflateRawSync } from "node:zlib";
 // carried over by the app on each update.
 const APP_ONLY = new Set(["app-manifest.json", "lifeos-pc.json", "cordova.js", "cordova_plugins.js"]);
 const cache = new Map(); // dir -> manifest (a published site folder never changes)
+// The names the app accepts (LiveUpdatePlugin.java refuses an update listing any other). Next.js names the
+// navigation data of pages like /books/<slug>/ with "$" ("__next.books.$d$slug.__PAGE__.txt"): those are
+// left out of the app's list, so the app opens such pages with a full load instead (they still work).
+const SAFE_NAME = /^[A-Za-z0-9._~@()+,\-/[\]]+$/;
 
 function walk(dir, root = dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -27,7 +31,7 @@ export function siteManifest(dir, { cacheIt = true } = {}) {
   if (cacheIt && cache.has(dir)) return cache.get(dir);
   const files = {};
   for (const path of walk(dir).sort()) {
-    if (APP_ONLY.has(path)) continue;
+    if (APP_ONLY.has(path) || !SAFE_NAME.test(path) || path.includes("..")) continue;
     files[path] = createHash("sha256").update(readFileSync(join(dir, path))).digest("hex").slice(0, 32);
   }
   const version = createHash("sha1").update(JSON.stringify(files)).digest("hex").slice(0, 12);
